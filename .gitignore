@@ -32,3 +32,13 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Sensitive Information ###
+application-local.yml
+application-*.yml
+.env
+*.properties
+
+### Local-only ###
+docs/design-notes
+docs/db_reset.sql
