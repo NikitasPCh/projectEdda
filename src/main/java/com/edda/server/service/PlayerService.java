@@ -5,6 +5,7 @@ import com.edda.server.repository.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,12 +17,16 @@ public class PlayerService {
 
     private final PlayerRepository playerRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PlayerCharacterService playerCharacterService;
 
+    @Transactional
     public Player createPlayer(String username, String password) {
         Player player = new Player();
         player.setUsername(username);
         player.setPasswordHash(passwordEncoder.encode(password));
-        return playerRepository.save(player);
+        Player savedPlayer = playerRepository.save(player);
+        playerCharacterService.createCharacter(savedPlayer);
+        return savedPlayer;
     }
 
     public List<Player> getAllPlayers() {
