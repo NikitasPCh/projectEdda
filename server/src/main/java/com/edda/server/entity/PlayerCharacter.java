@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -28,4 +29,10 @@ public class PlayerCharacter {
 
     @Column(nullable = false, length = 50)
     private String name;
+
+    @Column(name = "current_action_key", length = 50)
+    private String currentActionKey;
+
+    @Column(name = "last_calculated_at")
+    private Instant lastCalculatedAt;
 }
