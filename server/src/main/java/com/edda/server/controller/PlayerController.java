@@ -3,6 +3,7 @@ package com.edda.server.controller;
 import com.edda.server.dto.CreatePlayerRequest;
 import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.dto.PlayerResponse;
+import com.edda.server.dto.SelectActionRequest;
 import com.edda.server.entity.Player;
 import com.edda.server.service.PlayerCharacterService;
 import com.edda.server.service.PlayerService;
@@ -52,5 +53,11 @@ public class PlayerController {
     @GetMapping("/{playerId}/character")
     public PlayerCharacterResponse getCharacter(@PathVariable UUID playerId) {
         return playerCharacterService.getCharacterSummary(playerId);
+    }
+
+    @PostMapping("/{playerId}/character/action")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void selectAction(@PathVariable UUID playerId, @RequestBody SelectActionRequest request) {
+        playerCharacterService.selectAction(playerId, request.actionKey());
     }
 }

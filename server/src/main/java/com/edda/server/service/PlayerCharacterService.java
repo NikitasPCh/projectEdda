@@ -1,19 +1,23 @@
 package com.edda.server.service;
 
 import com.edda.server.dto.PlayerCharacterResponse;
+import com.edda.server.entity.Action;
 import com.edda.server.entity.CharacterSkill;
 import com.edda.server.entity.CharacterSkillId;
 import com.edda.server.entity.Player;
 import com.edda.server.entity.PlayerCharacter;
 import com.edda.server.entity.Skill;
+import com.edda.server.repository.ActionRepository;
 import com.edda.server.repository.CharacterSkillRepository;
 import com.edda.server.repository.PlayerCharacterRepository;
 import com.edda.server.repository.SkillRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,6 +30,7 @@ public class PlayerCharacterService {
     private final PlayerCharacterRepository playerCharacterRepository;
     private final SkillRepository skillRepository;
     private final CharacterSkillRepository characterSkillRepository;
+    private final ActionRepository actionRepository;
 
     public PlayerCharacter createCharacter(Player player) {
         PlayerCharacter character = new PlayerCharacter();
@@ -65,5 +70,17 @@ public class PlayerCharacterService {
                 .toList();
 
         return new PlayerCharacterResponse(character.getName(), skills);
+    }
+
+    public void selectAction(UUID playerId, String actionKey) {
+        PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
+
+        Action action = actionRepository.findById(actionKey)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action not found"));
+
+        character.setCurrentActionKey(action.getKey());
+        character.setLastCalculatedAt(Instant.now());
+        playerCharacterRepository.save(character);
     }
 }
