@@ -28,9 +28,9 @@ public class Action {
     @Column(name = "base_xp", nullable = false)
     private long baseXp;
 
-    @Column(name = "reward_min", nullable = false)
-    private int rewardMin;
+    @Column(name = "hacksilver_min", nullable = false)
+    private int hacksilverMin;
 
-    @Column(name = "reward_max", nullable = false)
-    private int rewardMax;
+    @Column(name = "hacksilver_max", nullable = false)
+    private int hacksilverMax;
 }

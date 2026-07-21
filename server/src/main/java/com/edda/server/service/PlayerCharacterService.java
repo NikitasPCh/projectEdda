@@ -36,6 +36,7 @@ public class PlayerCharacterService {
         PlayerCharacter character = new PlayerCharacter();
         character.setPlayerId(player.getId());
         character.setName(player.getUsername());
+        character.setHacksilver(100);
         PlayerCharacter savedCharacter = playerCharacterRepository.save(character);
 
         List<CharacterSkill> startingSkills = skillRepository.findAll().stream()
@@ -69,7 +70,7 @@ public class PlayerCharacterService {
                 })
                 .toList();
 
-        return new PlayerCharacterResponse(character.getName(), skills);
+        return new PlayerCharacterResponse(character.getName(), character.getHacksilver(), skills);
     }
 
     public void selectAction(UUID playerId, String actionKey) {
