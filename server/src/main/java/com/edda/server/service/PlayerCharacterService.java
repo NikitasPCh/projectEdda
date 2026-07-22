@@ -1,5 +1,6 @@
 package com.edda.server.service;
 
+import com.edda.server.config.GameProperties;
 import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.entity.Action;
 import com.edda.server.entity.CharacterSkill;
@@ -17,9 +18,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -31,6 +34,8 @@ public class PlayerCharacterService {
     private final SkillRepository skillRepository;
     private final CharacterSkillRepository characterSkillRepository;
     private final ActionRepository actionRepository;
+    private final GameProperties gameProperties;
+    private final Random random = new Random();
 
     public PlayerCharacter createCharacter(Player player) {
         PlayerCharacter character = new PlayerCharacter();
@@ -60,6 +65,8 @@ public class PlayerCharacterService {
         PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
 
+        calculateOfflineProgress(character);
+
         Map<String, Skill> skillsByKey = skillRepository.findAll().stream()
                 .collect(Collectors.toMap(Skill::getKey, skill -> skill));
 
@@ -77,11 +84,51 @@ public class PlayerCharacterService {
         PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
 
+        calculateOfflineProgress(character);
+
         Action action = actionRepository.findById(actionKey)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action not found"));
 
         character.setCurrentActionKey(action.getKey());
         character.setLastCalculatedAt(Instant.now());
+        playerCharacterRepository.save(character);
+    }
+
+    public void calculateOfflineProgress(PlayerCharacter character) {
+        if (character.getCurrentActionKey() == null) {
+            return;
+        }
+
+        Duration elapsed = Duration.between(character.getLastCalculatedAt(), Instant.now());
+        long n = elapsed.getSeconds() / gameProperties.actionIntervalSeconds();
+        if (n == 0) {
+            return;
+        }
+        character.setLastCalculatedAt(character.getLastCalculatedAt().plusSeconds(n * gameProperties.actionIntervalSeconds()));
+
+        Action action = actionRepository.findById(character.getCurrentActionKey())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action not found"));
+
+        CharacterSkillId skillId = new CharacterSkillId();
+        skillId.setPlayerCharacterId(character.getId());
+        skillId.setSkillKey(action.getSkillKey());
+
+        CharacterSkill characterSkill = characterSkillRepository.findById(skillId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character skill not found"));
+
+        characterSkill.setXp(characterSkill.getXp() + action.getBaseXp() * n);
+        characterSkillRepository.save(characterSkill);
+
+        double meanPerAction = (action.getHacksilverMin() + action.getHacksilverMax()) / 2.0;
+        double variancePerAction = Math.pow(action.getHacksilverMax() - action.getHacksilverMin(), 2) / 12.0;
+        double totalMean = n * meanPerAction;
+        double totalVariance = n * variancePerAction;
+        double totalStdDev = Math.sqrt(totalVariance);
+        double sample = totalMean + random.nextGaussian() * totalStdDev;
+        long hacksilverGained = Math.max(0, Math.round(sample));
+        hacksilverGained = Math.min(hacksilverGained, (long) action.getHacksilverMax() * n);
+        character.setHacksilver(character.getHacksilver() + hacksilverGained);
+
         playerCharacterRepository.save(character);
     }
 }
