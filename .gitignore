@@ -38,6 +38,7 @@ application-local.yml
 application-*.yml
 .env
 *.properties
+!application.properties
 
 ### Local-only ###
 docs/design-notes
