@@ -27,10 +27,4 @@ public class Action {
 
     @Column(name = "base_xp", nullable = false)
     private long baseXp;
-
-    @Column(name = "hacksilver_min", nullable = false)
-    private int hacksilverMin;
-
-    @Column(name = "hacksilver_max", nullable = false)
-    private int hacksilverMax;
 }

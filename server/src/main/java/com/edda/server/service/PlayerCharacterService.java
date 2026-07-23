@@ -3,14 +3,21 @@ package com.edda.server.service;
 import com.edda.server.config.GameProperties;
 import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.entity.Action;
+import com.edda.server.entity.ActionPrimaryReward;
+import com.edda.server.entity.CharacterResource;
+import com.edda.server.entity.CharacterResourceId;
 import com.edda.server.entity.CharacterSkill;
 import com.edda.server.entity.CharacterSkillId;
 import com.edda.server.entity.Player;
 import com.edda.server.entity.PlayerCharacter;
+import com.edda.server.entity.Resource;
 import com.edda.server.entity.Skill;
+import com.edda.server.repository.ActionPrimaryRewardRepository;
 import com.edda.server.repository.ActionRepository;
+import com.edda.server.repository.CharacterResourceRepository;
 import com.edda.server.repository.CharacterSkillRepository;
 import com.edda.server.repository.PlayerCharacterRepository;
+import com.edda.server.repository.ResourceRepository;
 import com.edda.server.repository.SkillRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -36,12 +43,14 @@ public class PlayerCharacterService {
     private final ActionRepository actionRepository;
     private final GameProperties gameProperties;
     private final Random random = new Random();
+    private final ResourceRepository resourceRepository;
+    private final CharacterResourceRepository characterResourceRepository;
+    private final ActionPrimaryRewardRepository actionPrimaryRewardRepository;
 
     public PlayerCharacter createCharacter(Player player) {
         PlayerCharacter character = new PlayerCharacter();
         character.setPlayerId(player.getId());
         character.setName(player.getUsername());
-        character.setHacksilver(100);
         PlayerCharacter savedCharacter = playerCharacterRepository.save(character);
 
         List<CharacterSkill> startingSkills = skillRepository.findAll().stream()
@@ -57,6 +66,20 @@ public class PlayerCharacterService {
                 })
                 .toList();
         characterSkillRepository.saveAll(startingSkills);
+
+        List<CharacterResource> startingResources = resourceRepository.findAll().stream()
+                .map(resource -> {
+                    CharacterResourceId id = new CharacterResourceId();
+                    id.setPlayerCharacterId(savedCharacter.getId());
+                    id.setResourceKey(resource.getKey());
+
+                    CharacterResource characterResource = new CharacterResource();
+                    characterResource.setId(id);
+                    characterResource.setQuantity(resource.getKey().equals("hacksilver") ? 100 : 0);
+                    return characterResource;
+                })
+                .toList();
+        characterResourceRepository.saveAll(startingResources);
 
         return savedCharacter;
     }
@@ -77,7 +100,17 @@ public class PlayerCharacterService {
                 })
                 .toList();
 
-        return new PlayerCharacterResponse(character.getName(), character.getHacksilver(), skills);
+        Map<String, Resource> resourcesByKey = resourceRepository.findAll().stream()
+                .collect(Collectors.toMap(Resource::getKey, resource -> resource));
+
+        List<PlayerCharacterResponse.ResourceQuantityResponse> resources = characterResourceRepository.findByIdPlayerCharacterId(character.getId()).stream()
+                .map(cr -> {
+                    Resource resource = resourcesByKey.get(cr.getId().getResourceKey());
+                    return new PlayerCharacterResponse.ResourceQuantityResponse(resource.getKey(), resource.getName(), cr.getQuantity());
+                })
+                .toList();
+
+        return new PlayerCharacterResponse(character.getName(), skills, resources);
     }
 
     public void selectAction(UUID playerId, String actionKey) {
@@ -119,15 +152,27 @@ public class PlayerCharacterService {
         characterSkill.setXp(characterSkill.getXp() + action.getBaseXp() * n);
         characterSkillRepository.save(characterSkill);
 
-        double meanPerAction = (action.getHacksilverMin() + action.getHacksilverMax()) / 2.0;
-        double variancePerAction = Math.pow(action.getHacksilverMax() - action.getHacksilverMin(), 2) / 12.0;
+        ActionPrimaryReward primaryReward = actionPrimaryRewardRepository.findById(action.getKey())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action primary reward not found"));
+
+        double meanPerAction = (primaryReward.getYieldMin() + primaryReward.getYieldMax()) / 2.0;
+        double variancePerAction = Math.pow(primaryReward.getYieldMax() - primaryReward.getYieldMin(), 2) / 12.0;
         double totalMean = n * meanPerAction;
         double totalVariance = n * variancePerAction;
         double totalStdDev = Math.sqrt(totalVariance);
         double sample = totalMean + random.nextGaussian() * totalStdDev;
-        long hacksilverGained = Math.max(0, Math.round(sample));
-        hacksilverGained = Math.min(hacksilverGained, (long) action.getHacksilverMax() * n);
-        character.setHacksilver(character.getHacksilver() + hacksilverGained);
+        long yieldGained = Math.max(0, Math.round(sample));
+        yieldGained = Math.min(yieldGained, (long) primaryReward.getYieldMax() * n);
+
+        CharacterResourceId resourceId = new CharacterResourceId();
+        resourceId.setPlayerCharacterId(character.getId());
+        resourceId.setResourceKey(primaryReward.getResourceKey());
+
+        CharacterResource characterResource = characterResourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character resource not found"));
+
+        characterResource.setQuantity(characterResource.getQuantity() + yieldGained);
+        characterResourceRepository.save(characterResource);
 
         playerCharacterRepository.save(character);
     }

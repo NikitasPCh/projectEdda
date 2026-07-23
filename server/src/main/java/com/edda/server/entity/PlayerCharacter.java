@@ -35,7 +35,4 @@ public class PlayerCharacter {
 
     @Column(name = "last_calculated_at")
     private Instant lastCalculatedAt;
-
-    @Column(nullable = false)
-    private long hacksilver;
 }
