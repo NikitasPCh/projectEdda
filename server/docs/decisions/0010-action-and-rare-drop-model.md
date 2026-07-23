@@ -1,7 +1,7 @@
 # 0010. Action and rare-drop reward model
 
 ## Status
-Accepted
+Accepted (the `hacksilver_min`/`hacksilver_max` reward columns on `game.action` described below are superseded by [0011](0011-generalized-resource-and-primary-reward-model.md); the `game.action_rare_drop` decision remains in effect)
 
 ## Context
 The skill/XP model ([0008](0008-skill-and-xp-tracking-model.md)) tracks progression per category (e.g., `fighting`, `mining`), but doesn't capture that a single category can contain multiple distinct performable actions — fighting a rat versus fighting a wolf, or mining copper versus mining iron — each with its own reward economy and its own set of possible bonus/rare drops. Modeling every distinct action as a row in `game.skill` would conflate "what a character levels up in" with "the specific thing a character is doing," and wouldn't cleanly support adding harder tiers of an existing category later. A separate table per skill category (`fighting_action`, `mining_action`, etc.) was also considered, but rejected: it hard-codes the current set of skill categories into the schema's shape, and it breaks a clean foreign-key relationship for "what action is a character currently performing" — a single column can't validly reference "one of several possible tables" without giving up an enforced foreign key in favor of an application-level type discriminator.
