@@ -4,6 +4,10 @@ import com.edda.server.config.GameProperties;
 import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.entity.Action;
 import com.edda.server.entity.ActionPrimaryReward;
+import com.edda.server.entity.ActionRareDrop;
+import com.edda.server.entity.ActionRareDropId;
+import com.edda.server.entity.CharacterInventory;
+import com.edda.server.entity.CharacterInventoryId;
 import com.edda.server.entity.CharacterResource;
 import com.edda.server.entity.CharacterResourceId;
 import com.edda.server.entity.CharacterSkill;
@@ -13,7 +17,9 @@ import com.edda.server.entity.PlayerCharacter;
 import com.edda.server.entity.Resource;
 import com.edda.server.entity.Skill;
 import com.edda.server.repository.ActionPrimaryRewardRepository;
+import com.edda.server.repository.ActionRareDropRepository;
 import com.edda.server.repository.ActionRepository;
+import com.edda.server.repository.CharacterInventoryRepository;
 import com.edda.server.repository.CharacterResourceRepository;
 import com.edda.server.repository.CharacterSkillRepository;
 import com.edda.server.repository.PlayerCharacterRepository;
@@ -29,6 +35,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -46,6 +53,8 @@ public class PlayerCharacterService {
     private final ResourceRepository resourceRepository;
     private final CharacterResourceRepository characterResourceRepository;
     private final ActionPrimaryRewardRepository actionPrimaryRewardRepository;
+    private final ActionRareDropRepository actionRareDropRepository;
+    private final CharacterInventoryRepository characterInventoryRepository;
 
     public PlayerCharacter createCharacter(Player player) {
         PlayerCharacter character = new PlayerCharacter();
@@ -174,6 +183,41 @@ public class PlayerCharacterService {
         characterResource.setQuantity(characterResource.getQuantity() + yieldGained);
         characterResourceRepository.save(characterResource);
 
+        rollRareDrops(character, action, n);
+
         playerCharacterRepository.save(character);
+    }
+
+    private void rollRareDrops(PlayerCharacter character, Action action, long n) {
+        List<ActionRareDrop> actionDrops = actionRareDropRepository.findByIdActionKey(action.getKey());
+
+        for (ActionRareDrop rareDrop : actionDrops) {
+            int successes = 0;
+            for (long j = 1; j <= n; j++) {
+                if (random.nextDouble() < rareDrop.getDropChance().doubleValue()) {
+                    successes++;
+                }
+            }
+
+            if (successes == 0) {
+                continue;
+            }
+
+            CharacterInventoryId id = new CharacterInventoryId();
+            id.setPlayerCharacterId(character.getId());
+            id.setItemKey(rareDrop.getId().getItemKey());
+
+            Optional<CharacterInventory> existing = characterInventoryRepository.findById(id);
+            if (existing.isPresent()) {
+                CharacterInventory inventory = existing.get();
+                inventory.setQuantity(inventory.getQuantity() + successes);
+                characterInventoryRepository.save(inventory);
+            } else {
+                CharacterInventory inventory = new CharacterInventory();
+                inventory.setId(id);
+                inventory.setQuantity(successes);
+                characterInventoryRepository.save(inventory);
+            }
+        }
     }
 }
