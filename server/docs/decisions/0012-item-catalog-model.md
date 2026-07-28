@@ -1,7 +1,7 @@
 # 0012. Item catalog model
 
 ## Status
-Accepted (closes the placeholder left by [0010](0010-action-and-rare-drop-model.md); per-character item ownership is a deliberately separate, not-yet-decided follow-up)
+Accepted (closes the placeholder left by [0010](0010-action-and-rare-drop-model.md); per-character item ownership and rare-drop-rolling logic, left as a follow-up here, are resolved by [0013](0013-character-inventory-ownership-model.md) and [0014](0014-rare-drop-rolling-algorithm.md))
 
 ## Context
 `game.action_rare_drop` ([0010](0010-action-and-rare-drop-model.md)) has always had a plain `item_key` string column with no foreign key, called out at the time as "a placeholder to be properly linked once that system is designed." Since then, [0011](0011-generalized-resource-and-primary-reward-model.md) modeled gathered resources (ore, and hacksilver itself) as generalized currency-like balances rather than items, reasoning that resources don't need item-specific concerns like stacking limits or equip slots — and explicitly left open whether genuine items would ever need their own model.
