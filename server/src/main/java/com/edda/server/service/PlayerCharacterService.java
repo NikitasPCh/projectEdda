@@ -12,6 +12,7 @@ import com.edda.server.entity.CharacterResource;
 import com.edda.server.entity.CharacterResourceId;
 import com.edda.server.entity.CharacterSkill;
 import com.edda.server.entity.CharacterSkillId;
+import com.edda.server.entity.Item;
 import com.edda.server.entity.Player;
 import com.edda.server.entity.PlayerCharacter;
 import com.edda.server.entity.Resource;
@@ -22,6 +23,7 @@ import com.edda.server.repository.ActionRepository;
 import com.edda.server.repository.CharacterInventoryRepository;
 import com.edda.server.repository.CharacterResourceRepository;
 import com.edda.server.repository.CharacterSkillRepository;
+import com.edda.server.repository.ItemRepository;
 import com.edda.server.repository.PlayerCharacterRepository;
 import com.edda.server.repository.ResourceRepository;
 import com.edda.server.repository.SkillRepository;
@@ -55,6 +57,7 @@ public class PlayerCharacterService {
     private final ActionPrimaryRewardRepository actionPrimaryRewardRepository;
     private final ActionRareDropRepository actionRareDropRepository;
     private final CharacterInventoryRepository characterInventoryRepository;
+    private final ItemRepository itemRepository;
 
     public PlayerCharacter createCharacter(Player player) {
         PlayerCharacter character = new PlayerCharacter();
@@ -119,7 +122,17 @@ public class PlayerCharacterService {
                 })
                 .toList();
 
-        return new PlayerCharacterResponse(character.getName(), skills, resources);
+        Map<String, Item> itemsByKey = itemRepository.findAll().stream()
+                .collect(Collectors.toMap(Item::getKey, item -> item));
+
+        List<PlayerCharacterResponse.ItemQuantityResponse> items = characterInventoryRepository.findByIdPlayerCharacterId(character.getId()).stream()
+                .map(ci -> {
+                    Item item = itemsByKey.get(ci.getId().getItemKey());
+                    return new PlayerCharacterResponse.ItemQuantityResponse(item.getKey(), item.getName(), item.getRarity(), ci.getQuantity());
+                })
+                .toList();
+
+        return new PlayerCharacterResponse(character.getName(), skills, resources, items);
     }
 
     public void selectAction(UUID playerId, String actionKey) {
