@@ -1,6 +1,7 @@
 package com.edda.server.service;
 
 import com.edda.server.config.GameProperties;
+import com.edda.server.dto.ActionProgressResponse;
 import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.entity.Action;
 import com.edda.server.entity.ActionPrimaryReward;
@@ -35,6 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -149,21 +151,36 @@ public class PlayerCharacterService {
         playerCharacterRepository.save(character);
     }
 
-    public void calculateOfflineProgress(PlayerCharacter character) {
+    public Optional<ActionProgressResponse> calculateOfflineProgress(PlayerCharacter character) {
         if (character.getCurrentActionKey() == null) {
-            return;
+            return Optional.empty();
         }
 
         Duration elapsed = Duration.between(character.getLastCalculatedAt(), Instant.now());
         long n = elapsed.getSeconds() / gameProperties.actionIntervalSeconds();
         if (n == 0) {
-            return;
+            return Optional.empty();
         }
         character.setLastCalculatedAt(character.getLastCalculatedAt().plusSeconds(n * gameProperties.actionIntervalSeconds()));
 
         Action action = actionRepository.findById(character.getCurrentActionKey())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action not found"));
 
+        PrimaryRewardResult primaryRewardResult = applyPrimaryReward(character, action, n, 1.0);
+        List<ActionProgressResponse.ItemGainResponse> itemsGained = rollRareDrops(character, action, n);
+
+        playerCharacterRepository.save(character);
+
+        return Optional.of(new ActionProgressResponse(
+                primaryRewardResult.skillKey(), primaryRewardResult.skillName(), primaryRewardResult.xpGained(),
+                primaryRewardResult.resourceKey(), primaryRewardResult.resourceName(), primaryRewardResult.quantityGained(),
+                itemsGained));
+    }
+
+    private record PrimaryRewardResult(String skillKey, String skillName, long xpGained, String resourceKey, String resourceName, long quantityGained) {
+    }
+
+    private PrimaryRewardResult applyPrimaryReward(PlayerCharacter character, Action action, long n, double coefficient) {
         CharacterSkillId skillId = new CharacterSkillId();
         skillId.setPlayerCharacterId(character.getId());
         skillId.setSkillKey(action.getSkillKey());
@@ -171,20 +188,21 @@ public class PlayerCharacterService {
         CharacterSkill characterSkill = characterSkillRepository.findById(skillId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character skill not found"));
 
-        characterSkill.setXp(characterSkill.getXp() + action.getBaseXp() * n);
+        long xpGained = Math.round(action.getBaseXp() * n * coefficient);
+        characterSkill.setXp(characterSkill.getXp() + xpGained);
         characterSkillRepository.save(characterSkill);
+
+        Skill skill = skillRepository.findById(action.getSkillKey())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Skill not found"));
 
         ActionPrimaryReward primaryReward = actionPrimaryRewardRepository.findById(action.getKey())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action primary reward not found"));
 
-        double meanPerAction = (primaryReward.getYieldMin() + primaryReward.getYieldMax()) / 2.0;
-        double variancePerAction = Math.pow(primaryReward.getYieldMax() - primaryReward.getYieldMin(), 2) / 12.0;
-        double totalMean = n * meanPerAction;
-        double totalVariance = n * variancePerAction;
-        double totalStdDev = Math.sqrt(totalVariance);
-        double sample = totalMean + random.nextGaussian() * totalStdDev;
-        long yieldGained = Math.max(0, Math.round(sample));
-        yieldGained = Math.min(yieldGained, (long) primaryReward.getYieldMax() * n);
+        int range = primaryReward.getYieldMax() - primaryReward.getYieldMin() + 1;
+        long quantityGained = 0;
+        for (long tick = 0; tick < n; tick++) {
+            quantityGained += Math.round((primaryReward.getYieldMin() + random.nextInt(range)) * coefficient);
+        }
 
         CharacterResourceId resourceId = new CharacterResourceId();
         resourceId.setPlayerCharacterId(character.getId());
@@ -193,16 +211,18 @@ public class PlayerCharacterService {
         CharacterResource characterResource = characterResourceRepository.findById(resourceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character resource not found"));
 
-        characterResource.setQuantity(characterResource.getQuantity() + yieldGained);
+        characterResource.setQuantity(characterResource.getQuantity() + quantityGained);
         characterResourceRepository.save(characterResource);
 
-        rollRareDrops(character, action, n);
+        Resource resource = resourceRepository.findById(primaryReward.getResourceKey())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Resource not found"));
 
-        playerCharacterRepository.save(character);
+        return new PrimaryRewardResult(skill.getKey(), skill.getName(), xpGained, resource.getKey(), resource.getName(), quantityGained);
     }
 
-    private void rollRareDrops(PlayerCharacter character, Action action, long n) {
+    private List<ActionProgressResponse.ItemGainResponse> rollRareDrops(PlayerCharacter character, Action action, long n) {
         List<ActionRareDrop> actionDrops = actionRareDropRepository.findByIdActionKey(action.getKey());
+        List<ActionProgressResponse.ItemGainResponse> itemsGained = new ArrayList<>();
 
         for (ActionRareDrop rareDrop : actionDrops) {
             int successes = 0;
@@ -231,6 +251,12 @@ public class PlayerCharacterService {
                 inventory.setQuantity(successes);
                 characterInventoryRepository.save(inventory);
             }
+
+            Item item = itemRepository.findById(rareDrop.getId().getItemKey())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
+            itemsGained.add(new ActionProgressResponse.ItemGainResponse(item.getKey(), item.getName(), item.getRarity(), successes));
         }
+
+        return itemsGained;
     }
 }
