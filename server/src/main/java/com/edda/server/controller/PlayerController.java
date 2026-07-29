@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.validation.Valid;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -31,7 +33,7 @@ public class PlayerController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public PlayerResponse createPlayer(@RequestBody CreatePlayerRequest request) {
+    public PlayerResponse createPlayer(@Valid @RequestBody CreatePlayerRequest request) {
         Player player = playerService.createPlayer(request.username(), request.password());
         return PlayerResponse.from(player);
     }
