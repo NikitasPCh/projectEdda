@@ -1,7 +1,7 @@
 # 0014. Rare-drop rolling algorithm
 
 ## Status
-Accepted (implements the rare-drop-rolling logic left open by [0012](0012-item-catalog-model.md), crediting into [0013](0013-character-inventory-ownership-model.md)'s `character_inventory`)
+Accepted (implements the rare-drop-rolling logic left open by [0012](0012-item-catalog-model.md), crediting into [0013](0013-character-inventory-ownership-model.md)'s `character_inventory`; the primary-reward divergence noted in Consequences below was later resolved by [0016](0016-exact-per-tick-primary-reward-calculation.md))
 
 ## Context
 [0009](0009-tracking-offline-progress.md) established that a character's randomized primary reward yield is approximated as a single draw from a Normal distribution (via the Central Limit Theorem) rather than looping `n` individual draws, since an offline character can accumulate a very large `n` and looping that many random draws would be needlessly expensive. That approximation is appropriate there because the underlying per-action draw is a continuous-ish uniform range with a reasonably large expected value.
@@ -18,4 +18,4 @@ This is implemented as a private `rollRareDrops(character, action, n)` helper on
 ## Consequences
 Rare-drop outcomes are always statistically exact, with no risk of a low-probability event effectively rounding down to impossible the way the Normal approximation would. This introduces the first `O(n)` component into `calculateOfflineProgress`, which is otherwise `O(1)` in `n` (XP and primary reward are both closed-form expressions) — an outer loop over however many rare-drop rows the action defines, each running `n` trials. This is judged acceptable at realistic scale: even an extreme case of six months offline at a five-second action interval with ten rare-drop rows on the action is on the order of tens of millions of cheap `double` comparisons, sub-second in practice. This should be revisited if the configurable action interval or any offline-duration limit ever changes enough to push `n` far higher.
 
-Primary reward continues to use the Normal-distribution approximation from [0009](0009-tracking-offline-progress.md) unchanged — the two mechanisms are intentionally allowed to diverge, since they solve different statistical problems (a continuous range vs. a rare Bernoulli event), not because of an oversight.
+Primary reward originally continued to use the Normal-distribution approximation from [0009](0009-tracking-offline-progress.md) unchanged at the time this ADR was written — the two mechanisms were intentionally allowed to diverge, since they solved different statistical problems (a continuous range vs. a rare Bernoulli event), not because of an oversight. [0016](0016-exact-per-tick-primary-reward-calculation.md) later unified them onto the same exact per-tick approach, once primary reward needed the same small-`n` accuracy guarantee this ADR established for rare drops.
