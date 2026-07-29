@@ -6,7 +6,6 @@ import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.entity.Action;
 import com.edda.server.entity.ActionPrimaryReward;
 import com.edda.server.entity.ActionRareDrop;
-import com.edda.server.entity.ActionRareDropId;
 import com.edda.server.entity.CharacterInventory;
 import com.edda.server.entity.CharacterInventoryId;
 import com.edda.server.entity.CharacterResource;
@@ -102,7 +101,7 @@ public class PlayerCharacterService {
         PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
 
-        calculateOfflineProgress(character);
+        Optional<ActionProgressResponse> progress = calculateOfflineProgress(character);
 
         Map<String, Skill> skillsByKey = skillRepository.findAll().stream()
                 .collect(Collectors.toMap(Skill::getKey, skill -> skill));
@@ -134,7 +133,7 @@ public class PlayerCharacterService {
                 })
                 .toList();
 
-        return new PlayerCharacterResponse(character.getName(), skills, resources, items);
+        return new PlayerCharacterResponse(character.getName(), skills, resources, items, progress.orElse(null));
     }
 
     public void selectAction(UUID playerId, String actionKey) {
