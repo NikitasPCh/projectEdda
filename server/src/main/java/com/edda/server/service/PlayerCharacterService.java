@@ -31,6 +31,7 @@ import com.edda.server.repository.SkillRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
@@ -97,6 +98,7 @@ public class PlayerCharacterService {
         return savedCharacter;
     }
 
+    @Transactional
     public PlayerCharacterResponse getCharacterSummary(UUID playerId) {
         PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
@@ -136,6 +138,7 @@ public class PlayerCharacterService {
         return new PlayerCharacterResponse(character.getName(), skills, resources, items, progress.orElse(null));
     }
 
+    @Transactional
     public void selectAction(UUID playerId, String actionKey) {
         PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
@@ -150,6 +153,7 @@ public class PlayerCharacterService {
         playerCharacterRepository.save(character);
     }
 
+    @Transactional
     public Optional<ActionProgressResponse> calculateOfflineProgress(PlayerCharacter character) {
         if (character.getCurrentActionKey() == null) {
             return Optional.empty();
