@@ -1,6 +1,8 @@
 package com.edda.server.controller;
 
 import com.edda.server.dto.CreatePlayerRequest;
+import com.edda.server.dto.LoginRequest;
+import com.edda.server.dto.LoginResponse;
 import com.edda.server.dto.PlayerCharacterResponse;
 import com.edda.server.dto.PlayerResponse;
 import com.edda.server.dto.SelectActionRequest;
@@ -61,5 +63,10 @@ public class PlayerController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void selectAction(@PathVariable UUID playerId, @RequestBody SelectActionRequest request) {
         playerCharacterService.selectAction(playerId, request.actionKey());
+    }
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        return playerService.login(request.username(), request.password());
     }
 }
