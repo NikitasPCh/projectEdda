@@ -154,6 +154,13 @@ public class PlayerCharacterService {
     }
 
     @Transactional
+    public Optional<ActionProgressResponse> calculateOfflineProgress(UUID playerId) {
+        PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
+        return calculateOfflineProgress(character);
+    }
+
+    @Transactional
     public Optional<ActionProgressResponse> calculateOfflineProgress(PlayerCharacter character) {
         if (character.getCurrentActionKey() == null) {
             return Optional.empty();

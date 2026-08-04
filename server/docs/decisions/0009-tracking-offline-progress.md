@@ -1,7 +1,7 @@
 # 0009. Tracking offline progress
 
 ## Status
-Accepted (the lazy-vs-eager scheduling decision below still holds; the Normal-distribution approximation for primary reward is superseded by [0016](0016-exact-per-tick-primary-reward-calculation.md))
+Accepted (the lazy-vs-eager scheduling decision below still holds; the Normal-distribution approximation for primary reward is superseded by [0016](0016-exact-per-tick-primary-reward-calculation.md); see [0017](0017-live-tick-scheduling-for-connected-players.md) for a related scheduling decision scoped to currently-connected players)
 
 ## Context
 A character's selected action produces results on a fixed interval (e.g. every 5 seconds) for as long as it's selected, and each result has variance — a randomized hacksilver amount within a range, and eventually a chance of rare drops. A character keeps "running" this action even while the player isn't connected, so progress needs to be reflected once they return.
