@@ -11,6 +11,9 @@ import com.edda.server.service.PlayerCharacterService;
 import com.edda.server.service.PlayerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,7 +69,17 @@ public class PlayerController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return playerService.login(request.username(), request.password());
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        PlayerService.LoginResult result = playerService.login(request.username(), request.password());
+
+        ResponseCookie cookie = ResponseCookie.from("sessionToken", result.token())
+                .httpOnly(true)
+                .sameSite("Lax")
+                .path("/api")
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new LoginResponse(result.playerId(), result.username()));
     }
 }

@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
+import jakarta.servlet.http.Cookie;
+
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,7 +33,13 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
-        String token = servletRequest.getServletRequest().getParameter("token");
+        Cookie[] cookies = servletRequest.getServletRequest().getCookies();
+        String token = cookies == null ? null : Arrays.stream(cookies)
+                .filter(cookie -> cookie.getName().equals("sessionToken"))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
+
         Optional<UUID> playerId = token != null ? sessionTokenStore.resolve(token) : Optional.empty();
 
         if (playerId.isEmpty()) {
