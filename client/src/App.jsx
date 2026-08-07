@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import './App.css'
 
@@ -12,7 +12,6 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [playerId, setPlayerId] = useState(null)
-  const [loginError, setLoginError] = useState('')
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
 
   async function fetchCharacter() {
@@ -24,6 +23,37 @@ function App() {
     }
     return response.json()
   }
+
+  async function loginUser({ username, password }) {
+    let response
+    try {
+      response = await fetch('http://localhost:8080/api/players/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, password }),
+      })
+    } catch {
+      throw new Error('Could not reach the server')
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Incorrect username or password')
+      }
+      throw new Error('Something went wrong, please try again')
+    }
+
+    return response.json()
+  }
+
+  const loginMutation = useMutation({
+    mutationFn: loginUser,
+    onSuccess: (data) => {
+      setPlayerId(data.playerId)
+      setView('dashboard')
+    },
+  })
 
   const { data: character, isLoading, isError } = useQuery({
     queryKey: ['character', playerId],
@@ -38,33 +68,9 @@ function App() {
       {view === 'login' && (
         <form
           noValidate
-          onSubmit={async (e) => {
+          onSubmit={(e) => {
             e.preventDefault()
-            setLoginError('')
-
-            try {
-              const response = await fetch('http://localhost:8080/api/players/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ username, password }),
-              })
-
-              if (!response.ok) {
-                if (response.status === 401) {
-                  setLoginError('Incorrect username or password')
-                } else {
-                  setLoginError('Something went wrong, please try again')
-                }
-                return
-              }
-
-              const data = await response.json()
-              setPlayerId(data.playerId)
-              setView('dashboard')
-            } catch {
-              setLoginError('Could not reach the server')
-            }
+            loginMutation.mutate({ username, password })
           }}
         >
           <div>
@@ -87,7 +93,7 @@ function App() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {loginError && <p>{loginError}</p>}
+          {loginMutation.isError && <p>{loginMutation.error.message}</p>}
           <button type="submit" disabled={!username.trim() || !password.trim()}>
             Log in
           </button>
