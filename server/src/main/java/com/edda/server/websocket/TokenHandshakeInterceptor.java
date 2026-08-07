@@ -11,8 +11,8 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 
 import jakarta.servlet.http.Cookie;
 
-import java.util.Arrays;
 import java.util.Map;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,13 +34,8 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
         }
 
         Cookie[] cookies = servletRequest.getServletRequest().getCookies();
-        String token = cookies == null ? null : Arrays.stream(cookies)
-                .filter(cookie -> cookie.getName().equals("sessionToken"))
-                .map(Cookie::getValue)
-                .findFirst()
-                .orElse(null);
 
-        Optional<UUID> playerId = token != null ? sessionTokenStore.resolve(token) : Optional.empty();
+        Optional<UUID> playerId = sessionTokenStore.resolveFromCookies(cookies);
 
         if (playerId.isEmpty()) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);

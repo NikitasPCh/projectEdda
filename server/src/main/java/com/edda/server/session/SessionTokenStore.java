@@ -2,6 +2,9 @@ package com.edda.server.session;
 
 import org.springframework.stereotype.Component;
 
+import jakarta.servlet.http.Cookie;
+
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,5 +23,14 @@ public class SessionTokenStore {
 
     public Optional<UUID> resolve(String token) {
         return Optional.ofNullable(tokensToPlayerId.get(token));
+    }
+
+    public Optional<UUID> resolveFromCookies(Cookie[] cookies) {
+        String token = cookies == null ? null : Arrays.stream(cookies)
+                .filter(cookie -> cookie.getName().equals("sessionToken"))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
+        return token != null ? resolve(token) : Optional.empty();
     }
 }

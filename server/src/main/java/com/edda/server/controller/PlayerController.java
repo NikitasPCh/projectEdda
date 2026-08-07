@@ -15,17 +15,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.RequestAttribute;
 
 import jakarta.validation.Valid;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -43,28 +41,14 @@ public class PlayerController {
         return PlayerResponse.from(player);
     }
 
-    @GetMapping
-    public List<PlayerResponse> getAllPlayers() {
-        return playerService.getAllPlayers().stream()
-                .map(PlayerResponse::from)
-                .toList();
-    }
-
-    @GetMapping("/{id}")
-    public PlayerResponse getPlayerById(@PathVariable UUID id) {
-        Player player = playerService.getPlayerById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Player not found"));
-        return PlayerResponse.from(player);
-    }
-
-    @GetMapping("/{playerId}/character")
-    public PlayerCharacterResponse getCharacter(@PathVariable UUID playerId) {
+    @GetMapping("/character")
+    public PlayerCharacterResponse getCharacter(@RequestAttribute UUID playerId) {
         return playerCharacterService.getCharacterSummary(playerId);
     }
 
-    @PostMapping("/{playerId}/character/action")
+    @PostMapping("/character/action")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void selectAction(@PathVariable UUID playerId, @RequestBody SelectActionRequest request) {
+    public void selectAction(@RequestAttribute UUID playerId, @RequestBody SelectActionRequest request) {
         playerCharacterService.selectAction(playerId, request.actionKey());
     }
 

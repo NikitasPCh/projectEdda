@@ -10,8 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -31,14 +29,6 @@ public class PlayerService {
         Player savedPlayer = playerRepository.save(player);
         playerCharacterService.createCharacter(savedPlayer);
         return savedPlayer;
-    }
-
-    public List<Player> getAllPlayers() {
-        return playerRepository.findAll();
-    }
-
-    public Optional<Player> getPlayerById(UUID id) {
-        return playerRepository.findById(id);
     }
 
     public record LoginResult(UUID playerId, String username, String token) {}
