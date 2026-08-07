@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import './App.css'
 
@@ -13,6 +14,22 @@ function App() {
   const [playerId, setPlayerId] = useState(null)
   const [loginError, setLoginError] = useState('')
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
+
+  async function fetchCharacter() {
+    const response = await fetch('http://localhost:8080/api/players/character', {
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      throw new Error('Failed to fetch character')
+    }
+    return response.json()
+  }
+
+  const { data: character, isLoading, isError } = useQuery({
+    queryKey: ['character', playerId],
+    queryFn: fetchCharacter,
+    enabled: view === 'dashboard',
+  })
 
   return (
     <div>
@@ -144,6 +161,40 @@ function App() {
       {view === 'dashboard' && (
         <div>
           <h2>Logged in as {username}</h2>
+          {isLoading && <p>Loading character...</p>}
+          {isError && <p>Could not load character data.</p>}
+          {character && (
+            <div>
+              <h3>{character.name}</h3>
+
+              <h4>Skills</h4>
+              <ul>
+                {character.skills.map((skill) => (
+                  <li key={skill.skillKey}>
+                    {skill.skillName}: {skill.xp} XP
+                  </li>
+                ))}
+              </ul>
+
+              <h4>Resources</h4>
+              <ul>
+                {character.resources.map((resource) => (
+                  <li key={resource.resourceKey}>
+                    {resource.resourceName}: {resource.quantity}
+                  </li>
+                ))}
+              </ul>
+
+              <h4>Items</h4>
+              <ul>
+                {character.items.map((item) => (
+                  <li key={item.itemKey}>
+                    {item.itemName} ({item.rarity}): {item.quantity}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
