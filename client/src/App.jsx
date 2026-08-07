@@ -10,6 +10,8 @@ function App() {
   const [registerUsername, setRegisterUsername] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [playerId, setPlayerId] = useState(null)
+  const [loginError, setLoginError] = useState('')
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
 
   return (
@@ -19,9 +21,33 @@ function App() {
       {view === 'login' && (
         <form
           noValidate
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
-            setView('dashboard')
+            setLoginError('')
+
+            try {
+              const response = await fetch('http://localhost:8080/api/players/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ username, password }),
+              })
+
+              if (!response.ok) {
+                if (response.status === 401) {
+                  setLoginError('Incorrect username or password')
+                } else {
+                  setLoginError('Something went wrong, please try again')
+                }
+                return
+              }
+
+              const data = await response.json()
+              setPlayerId(data.playerId)
+              setView('dashboard')
+            } catch {
+              setLoginError('Could not reach the server')
+            }
           }}
         >
           <div>
@@ -44,6 +70,7 @@ function App() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+          {loginError && <p>{loginError}</p>}
           <button type="submit" disabled={!username.trim() || !password.trim()}>
             Log in
           </button>
