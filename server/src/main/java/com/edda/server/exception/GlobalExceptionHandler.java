@@ -10,6 +10,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.hibernate.exception.ConstraintViolationException;
+
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -17,8 +19,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse("A record with these values already exists."));
+        String message = "A record with these values already exists.";
+        if (ex.getCause() instanceof ConstraintViolationException cve) {
+            message = switch (cve.getConstraintName()) {
+                case "uk_player_username" -> "Username already taken";
+                default -> message;
+            };
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(message));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

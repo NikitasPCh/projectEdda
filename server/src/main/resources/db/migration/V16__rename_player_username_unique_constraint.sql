@@ -1,0 +1,1 @@
+ALTER TABLE account.player RENAME CONSTRAINT player_username_key TO uk_player_username;
