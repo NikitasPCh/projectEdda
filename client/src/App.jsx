@@ -13,6 +13,7 @@ function App() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [playerId, setPlayerId] = useState(null)
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
+  const [autoLoginFailedMessage, setAutoLoginFailedMessage] = useState(null)
 
   async function fetchCharacter() {
     const response = await fetch('http://localhost:8080/api/players/character', {
@@ -47,12 +48,50 @@ function App() {
     return response.json()
   }
 
+  async function registerUser({ username, password }) {
+    let response
+    try {
+      response = await fetch('http://localhost:8080/api/players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({username, password}),
+      })
+    } catch {
+      throw new Error('Could not reach the server')
+    }
+
+    if(!response.ok) {
+      const data = await response.json()
+      throw new Error(data.message)
+    }
+
+    return response.json()
+  }
+
   const loginMutation = useMutation({
     mutationFn: loginUser,
     onSuccess: (data) => {
       setPlayerId(data.playerId)
       setView('dashboard')
     },
+  })
+
+  const registerMutation = useMutation({
+    mutationFn: registerUser,
+    onSuccess: () => {
+      loginMutation.mutate(
+        { username: registerUsername, password:registerPassword },
+        {
+          onError: () => {
+            setUsername(registerUsername)
+            setAutoLoginFailedMessage(
+              'Account created! We could not log you in automatically - please log in below.'
+            )
+            setView('login')
+          }
+        }
+      )
+    }
   })
 
   const { data: character, isLoading, isError } = useQuery({
@@ -93,6 +132,7 @@ function App() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+          {autoLoginFailedMessage && <p>{autoLoginFailedMessage}</p>}
           {loginMutation.isError && <p>{loginMutation.error.message}</p>}
           <button type="submit" disabled={!username.trim() || !password.trim()}>
             Log in
@@ -107,7 +147,13 @@ function App() {
       )}
 
       {view === 'register' && (
-        <form noValidate>
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault()
+            registerMutation.mutate({ username:registerUsername, password:registerPassword })
+          }}
+        >
           <div>
             <label htmlFor="register-username">Username</label>
             <input
@@ -146,6 +192,7 @@ function App() {
               <p>Passwords do not match</p>
             )}
           </div>
+          {registerMutation.isError && <p>{registerMutation.error.message}</p>}
           <button
             type="submit"
             disabled={
