@@ -1,11 +1,12 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import SubmitButton from './components/SubmitButton'
 import './App.css'
 
 const PASSWORD_RULES = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).+$/
 
 function App() {
-  const [view, setView] = useState('login')
+  const [view, setView] = useState('checking')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
@@ -94,15 +95,24 @@ function App() {
     }
   })
 
-  const { data: character, isLoading, isError } = useQuery({
+  const { data: character, isLoading, isSuccess, isError } = useQuery({
     queryKey: ['character', playerId],
     queryFn: fetchCharacter,
-    enabled: view === 'dashboard',
+    retry: false,
   })
+
+  useEffect(() => {
+    if (isSuccess) {
+      setView('dashboard')
+    } else if (isError) {
+      setView('login')
+    }
+  }, [isSuccess, isError])
 
   return (
     <div>
       <h1>Edda</h1>
+      {view === 'checking' && <p>Checking session...</p>}
 
       {view === 'login' && (
         <form
@@ -134,9 +144,13 @@ function App() {
           </div>
           {autoLoginFailedMessage && <p>{autoLoginFailedMessage}</p>}
           {loginMutation.isError && <p>{loginMutation.error.message}</p>}
-          <button type="submit" disabled={!username.trim() || !password.trim()}>
+          <SubmitButton
+            pending={loginMutation.isPending}
+            disabled={!username.trim() || !password.trim()}
+            pendingLabel="Logging in..."
+          >
             Log in
-          </button>
+          </SubmitButton>
           <p>
             Don't have an account?{' '}
             <button type="button" onClick={() => setView('register')}>
@@ -193,16 +207,17 @@ function App() {
             )}
           </div>
           {registerMutation.isError && <p>{registerMutation.error.message}</p>}
-          <button
-            type="submit"
+          <SubmitButton
+            pending={registerMutation.isPending}
             disabled={
               !registerUsername.trim() ||
               !passwordValid ||
               registerPassword !== confirmPassword
             }
+            pendingLabel="Registering..."
           >
             Register
-          </button>
+          </SubmitButton>
           <p>
             Already have an account?{' '}
             <button type="button" onClick={() => setView('login')}>
@@ -213,7 +228,6 @@ function App() {
       )}
       {view === 'dashboard' && (
         <div>
-          <h2>Logged in as {username}</h2>
           {isLoading && <p>Loading character...</p>}
           {isError && <p>Could not load character data.</p>}
           {character && (
