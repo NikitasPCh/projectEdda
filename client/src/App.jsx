@@ -69,6 +69,22 @@ function App() {
     return response.json()
   }
 
+  async function logoutUser() {
+    let response
+    try {
+      response = await fetch('http://localhost:8080/api/players/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch {
+      throw new Error('Could not reach the server')
+    }
+
+    if (!response.ok) {
+      throw new Error('Something went wrong, please try again')
+    }
+  }
+
   const loginMutation = useMutation({
     mutationFn: loginUser,
     onSuccess: (data) => {
@@ -93,6 +109,16 @@ function App() {
         }
       )
     }
+  })
+
+  const logoutMutation = useMutation({
+    mutationFn: logoutUser,
+    onSuccess: () => {
+      setPlayerId(null)
+      setUsername('')
+      setPassword('')
+      setView('login')
+    },
   })
 
   const { data: character, isLoading, isSuccess, isError } = useQuery({
@@ -233,7 +259,14 @@ function App() {
           {character && (
             <div>
               <h3>{character.name}</h3>
-
+              <button
+                type="button"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+              >
+                {logoutMutation.isPending ? 'Logging out...' : 'Log Out'}
+              </button>
+              {logoutMutation.isError && <p>{logoutMutation.error.message}</p>}
               <h4>Skills</h4>
               <ul>
                 {character.skills.map((skill) => (
