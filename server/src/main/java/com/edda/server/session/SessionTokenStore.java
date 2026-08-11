@@ -14,10 +14,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SessionTokenStore {
 
     private final Map<String, UUID> tokensToPlayerId = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerIdToToken = new ConcurrentHashMap<>();
 
     public String issueToken(UUID playerId) {
+        String oldToken = playerIdToToken.get(playerId);
+        if (oldToken != null) {
+            tokensToPlayerId.remove(oldToken);
+        }
+
         String token = UUID.randomUUID().toString();
         tokensToPlayerId.put(token, playerId);
+        playerIdToToken.put(playerId, token);
         return token;
     }
 
@@ -26,7 +33,10 @@ public class SessionTokenStore {
     }
 
     public void invalidate(String token) {
-        tokensToPlayerId.remove(token);
+        UUID playerId = tokensToPlayerId.remove(token);
+        if (playerId != null) {
+            playerIdToToken.remove(playerId, token);
+        }
     }
 
     public void invalidateFromCookies(Cookie[] cookies) {
