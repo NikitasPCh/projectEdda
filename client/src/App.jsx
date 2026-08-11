@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import SubmitButton from './components/SubmitButton'
 import './App.css'
@@ -13,8 +13,10 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [playerId, setPlayerId] = useState(null)
-  const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
   const [autoLoginFailedMessage, setAutoLoginFailedMessage] = useState(null)
+  const [welcomeProgress, setWelcomeProgress] = useState(null)
+  const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
+  const queryClient = useQueryClient()
 
   async function fetchCharacter() {
     const response = await fetch('http://localhost:8080/api/players/character', {
@@ -55,13 +57,13 @@ function App() {
       response = await fetch('http://localhost:8080/api/players', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({username, password}),
+        body: JSON.stringify({ username, password }),
       })
     } catch {
       throw new Error('Could not reach the server')
     }
 
-    if(!response.ok) {
+    if (!response.ok) {
       const data = await response.json()
       throw new Error(data.message)
     }
@@ -87,8 +89,11 @@ function App() {
 
   const loginMutation = useMutation({
     mutationFn: loginUser,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      const freshCharacter = await fetchCharacter()
+      queryClient.setQueryData(['character', data.playerId], freshCharacter)
       setPlayerId(data.playerId)
+      setWelcomeProgress(freshCharacter.progress)
       setView('dashboard')
     },
   })
@@ -97,7 +102,7 @@ function App() {
     mutationFn: registerUser,
     onSuccess: () => {
       loginMutation.mutate(
-        { username: registerUsername, password:registerPassword },
+        { username: registerUsername, password: registerPassword },
         {
           onError: () => {
             setUsername(registerUsername)
@@ -125,6 +130,7 @@ function App() {
     queryKey: ['character', playerId],
     queryFn: fetchCharacter,
     retry: false,
+    staleTime: 5000,
   })
 
   useEffect(() => {
@@ -191,7 +197,7 @@ function App() {
           noValidate
           onSubmit={(e) => {
             e.preventDefault()
-            registerMutation.mutate({ username:registerUsername, password:registerPassword })
+            registerMutation.mutate({ username: registerUsername, password: registerPassword })
           }}
         >
           <div>
@@ -295,6 +301,28 @@ function App() {
               </ul>
             </div>
           )}
+        </div>
+      )}
+      {welcomeProgress && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <button type="button" className="modal-close" onClick={() => setWelcomeProgress(null)}>
+              X
+            </button>
+            <h3>Welcome back!</h3>
+            <p>While away you gained:</p>
+            <p>{welcomeProgress.skillName}: +{welcomeProgress.xpGained} XP</p>
+            <p>{welcomeProgress.resourceName}: +{welcomeProgress.quantityGained}</p>
+            {welcomeProgress.itemsGained.length > 0 && (
+              <ul>
+                {welcomeProgress.itemsGained.map((item) => (
+                  <li key={item.itemKey}>
+                    {item.itemName} ({item.rarity}): +{item.quantityGained}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </div>
