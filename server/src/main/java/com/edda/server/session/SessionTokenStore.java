@@ -25,12 +25,25 @@ public class SessionTokenStore {
         return Optional.ofNullable(tokensToPlayerId.get(token));
     }
 
+    public void invalidate(String token) {
+        tokensToPlayerId.remove(token);
+    }
+
+    public void invalidateFromCookies(Cookie[] cookies) {
+        extractToken(cookies).ifPresent(this::invalidate);
+    }
+
     public Optional<UUID> resolveFromCookies(Cookie[] cookies) {
-        String token = cookies == null ? null : Arrays.stream(cookies)
+        return extractToken(cookies).flatMap(this::resolve);
+    }
+
+    private Optional<String> extractToken(Cookie[] cookies) {
+        if (cookies == null) {
+            return Optional.empty();
+        }
+        return Arrays.stream(cookies)
                 .filter(cookie -> cookie.getName().equals("sessionToken"))
                 .map(Cookie::getValue)
-                .findFirst()
-                .orElse(null);
-        return token != null ? resolve(token) : Optional.empty();
+                .findFirst();
     }
 }

@@ -3,7 +3,11 @@ package com.edda.server.service;
 import com.edda.server.entity.Player;
 import com.edda.server.repository.PlayerRepository;
 import com.edda.server.session.SessionTokenStore;
+
+import jakarta.servlet.http.Cookie;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -39,5 +43,9 @@ public class PlayerService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password"));
         String token = sessionTokenStore.issueToken(player.getId());
         return new LoginResult(player.getId(), player.getUsername(), token);
+    }
+
+    public void logout(Cookie[] cookies) {
+        sessionTokenStore.invalidateFromCookies(cookies);
     }
 }

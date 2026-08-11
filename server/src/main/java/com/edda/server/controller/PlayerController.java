@@ -9,7 +9,11 @@ import com.edda.server.dto.SelectActionRequest;
 import com.edda.server.entity.Player;
 import com.edda.server.service.PlayerCharacterService;
 import com.edda.server.service.PlayerService;
+
+import jakarta.servlet.http.HttpServletRequest;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -65,5 +69,21 @@ public class PlayerController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(new LoginResponse(result.playerId(), result.username()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        playerService.logout(request.getCookies());
+
+        ResponseCookie cookie = ResponseCookie.from("sessionToken", "")
+                .httpOnly(true)
+                .sameSite("Lax")
+                .path("/api")
+                .maxAge(0)
+                .build();
+
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
     }
 }
