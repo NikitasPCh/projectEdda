@@ -4,6 +4,7 @@ import SubmitButton from './components/SubmitButton'
 import './App.css'
 
 const PASSWORD_RULES = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).+$/
+const API_BASE = 'http://localhost:8080/api'
 
 function App() {
   const [view, setView] = useState('checking')
@@ -20,8 +21,16 @@ function App() {
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
   const queryClient = useQueryClient()
 
+  async function safeFetch(url, options) {
+    try {
+      return await fetch(url, options)
+    } catch {
+      throw new Error('Could not reach the server')
+    }
+  }
+
   async function fetchCharacter() {
-    const response = await fetch('http://localhost:8080/api/players/character', {
+    const response = await safeFetch(`${API_BASE}/players/character`, {
       credentials: 'include',
     })
     if (!response.ok) {
@@ -31,17 +40,12 @@ function App() {
   }
 
   async function loginUser({ username, password }) {
-    let response
-    try {
-      response = await fetch('http://localhost:8080/api/players/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ username, password }),
-      })
-    } catch {
-      throw new Error('Could not reach the server')
-    }
+    const response = await safeFetch(`${API_BASE}/players/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username, password }),
+    })
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -54,16 +58,11 @@ function App() {
   }
 
   async function registerUser({ username, password }) {
-    let response
-    try {
-      response = await fetch('http://localhost:8080/api/players', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
-    } catch {
-      throw new Error('Could not reach the server')
-    }
+    const response = await safeFetch(`${API_BASE}/players`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
 
     if (!response.ok) {
       const data = await response.json()
@@ -74,15 +73,10 @@ function App() {
   }
 
   async function logoutUser() {
-    let response
-    try {
-      response = await fetch('http://localhost:8080/api/players/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch {
-      throw new Error('Could not reach the server')
-    }
+    const response = await safeFetch(`${API_BASE}/players/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    })
 
     if (!response.ok) {
       throw new Error('Something went wrong, please try again')
