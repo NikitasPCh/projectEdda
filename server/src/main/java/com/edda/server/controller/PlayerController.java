@@ -38,6 +38,13 @@ public class PlayerController {
     private final PlayerService playerService;
     private final PlayerCharacterService playerCharacterService;
 
+    private ResponseCookie.ResponseCookieBuilder sessionCookieBuilder(String token) {
+        return ResponseCookie.from("sessionToken", token)
+                .httpOnly(true)
+                .sameSite("Lax")
+                .path("/api");
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PlayerResponse createPlayer(@Valid @RequestBody CreatePlayerRequest request) {
@@ -60,11 +67,7 @@ public class PlayerController {
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         PlayerService.LoginResult result = playerService.login(request.username(), request.password());
 
-        ResponseCookie cookie = ResponseCookie.from("sessionToken", result.token())
-                .httpOnly(true)
-                .sameSite("Lax")
-                .path("/api")
-                .build();
+        ResponseCookie cookie = sessionCookieBuilder(result.token()).build();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -75,12 +78,7 @@ public class PlayerController {
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         playerService.logout(request.getCookies());
 
-        ResponseCookie cookie = ResponseCookie.from("sessionToken", "")
-                .httpOnly(true)
-                .sameSite("Lax")
-                .path("/api")
-                .maxAge(0)
-                .build();
+        ResponseCookie cookie = sessionCookieBuilder("").maxAge(0).build();
 
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())

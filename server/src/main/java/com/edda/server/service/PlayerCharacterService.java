@@ -61,6 +61,10 @@ public class PlayerCharacterService {
     private final CharacterInventoryRepository characterInventoryRepository;
     private final ItemRepository itemRepository;
 
+    private static <T> T orNotFound(Optional<T> optional, String message) {
+        return optional.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, message));
+    }
+
     public PlayerCharacter createCharacter(Player player) {
         PlayerCharacter character = new PlayerCharacter();
         character.setPlayerId(player.getId());
@@ -100,8 +104,7 @@ public class PlayerCharacterService {
 
     @Transactional
     public PlayerCharacterResponse getCharacterSummary(UUID playerId) {
-        PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
+        PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
 
         Optional<ActionProgressResponse> progress = calculateOfflineProgress(character);
 
@@ -140,13 +143,11 @@ public class PlayerCharacterService {
 
     @Transactional
     public void selectAction(UUID playerId, String actionKey) {
-        PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
+        PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
 
         calculateOfflineProgress(character);
 
-        Action action = actionRepository.findById(actionKey)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action not found"));
+        Action action = orNotFound(actionRepository.findById(actionKey), "Action not found");
 
         character.setCurrentActionKey(action.getKey());
         character.setLastCalculatedAt(Instant.now());
@@ -155,8 +156,7 @@ public class PlayerCharacterService {
 
     @Transactional
     public Optional<ActionProgressResponse> calculateOfflineProgress(UUID playerId) {
-        PlayerCharacter character = playerCharacterRepository.findByPlayerId(playerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character not found"));
+        PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
         return calculateOfflineProgress(character);
     }
 
@@ -173,8 +173,7 @@ public class PlayerCharacterService {
         }
         character.setLastCalculatedAt(character.getLastCalculatedAt().plusSeconds(n * gameProperties.actionIntervalSeconds()));
 
-        Action action = actionRepository.findById(character.getCurrentActionKey())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action not found"));
+        Action action = orNotFound(actionRepository.findById(character.getCurrentActionKey()), "Action not found");
 
         PrimaryRewardResult primaryRewardResult = applyPrimaryReward(character, action, n, 1.0);
         List<ActionProgressResponse.ItemGainResponse> itemsGained = rollRareDrops(character, action, n);
@@ -195,18 +194,15 @@ public class PlayerCharacterService {
         skillId.setPlayerCharacterId(character.getId());
         skillId.setSkillKey(action.getSkillKey());
 
-        CharacterSkill characterSkill = characterSkillRepository.findById(skillId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character skill not found"));
+        CharacterSkill characterSkill = orNotFound(characterSkillRepository.findById(skillId), "Character skill not found");
 
         long xpGained = Math.round(action.getBaseXp() * n * coefficient);
         characterSkill.setXp(characterSkill.getXp() + xpGained);
         characterSkillRepository.save(characterSkill);
 
-        Skill skill = skillRepository.findById(action.getSkillKey())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Skill not found"));
+        Skill skill = orNotFound(skillRepository.findById(action.getSkillKey()), "Skill not found");
 
-        ActionPrimaryReward primaryReward = actionPrimaryRewardRepository.findById(action.getKey())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action primary reward not found"));
+        ActionPrimaryReward primaryReward = orNotFound(actionPrimaryRewardRepository.findById(action.getKey()), "Action primary reward not found");
 
         int range = primaryReward.getYieldMax() - primaryReward.getYieldMin() + 1;
         long quantityGained = 0;
@@ -218,14 +214,12 @@ public class PlayerCharacterService {
         resourceId.setPlayerCharacterId(character.getId());
         resourceId.setResourceKey(primaryReward.getResourceKey());
 
-        CharacterResource characterResource = characterResourceRepository.findById(resourceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Character resource not found"));
+        CharacterResource characterResource = orNotFound(characterResourceRepository.findById(resourceId), "Character resource not found");
 
         characterResource.setQuantity(characterResource.getQuantity() + quantityGained);
         characterResourceRepository.save(characterResource);
 
-        Resource resource = resourceRepository.findById(primaryReward.getResourceKey())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Resource not found"));
+        Resource resource = orNotFound(resourceRepository.findById(primaryReward.getResourceKey()), "Resource not found");
 
         return new PrimaryRewardResult(skill.getKey(), skill.getName(), xpGained, resource.getKey(), resource.getName(), quantityGained);
     }
@@ -262,8 +256,7 @@ public class PlayerCharacterService {
                 characterInventoryRepository.save(inventory);
             }
 
-            Item item = itemRepository.findById(rareDrop.getId().getItemKey())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
+            Item item = orNotFound(itemRepository.findById(rareDrop.getId().getItemKey()), "Item not found");
             itemsGained.add(new ActionProgressResponse.ItemGainResponse(item.getKey(), item.getName(), item.getRarity(), successes));
         }
 
