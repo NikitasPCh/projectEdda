@@ -21,6 +21,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(gameWebSocketHandler, "/game")
-                .addInterceptors(tokenHandshakeInterceptor);
+                .addInterceptors(tokenHandshakeInterceptor)
+                .setAllowedOrigins("http://localhost:5173");
     }
 }
