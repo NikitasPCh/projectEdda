@@ -1,7 +1,7 @@
 # 0005. Direct fetch and cache seeding for post-login character data
 
 ## Status
-Accepted
+Superseded by [0006](0006-cache-clear-on-logout-supersedes-direct-fetch-seeding.md)
 
 ## Context
 A "welcome back" progress modal, shown right after a real credential-based login, needed a reliable snapshot of the `progress` delta returned by `GET /players/character`. The natural first approach was to lean on the `character` query (`useQuery`, keyed `['character', playerId]`) that already drives the dashboard — capture whatever it resolved to via a `useEffect` reacting to `isSuccess`, gated by a one-shot flag set on login.

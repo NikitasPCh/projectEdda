@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import SubmitButton from './components/SubmitButton'
 import './App.css'
 
@@ -15,6 +15,8 @@ function App() {
   const [playerId, setPlayerId] = useState(null)
   const [autoLoginFailedMessage, setAutoLoginFailedMessage] = useState(null)
   const [welcomeProgress, setWelcomeProgress] = useState(null)
+  const [justLoggedIn, setJustLoggedIn] = useState(false)
+  const [forcedLogoutMessage, setForcedLogoutMessage] = useState(null)
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
   const queryClient = useQueryClient()
 
@@ -87,15 +89,20 @@ function App() {
     }
   }
 
+  const resetToLoggedOut = useCallback(() => {
+    queryClient.removeQueries({ queryKey: ['character', playerId] })
+    setPlayerId(null)
+    setUsername('')
+    setPassword('')
+    setView('login')
+  }, [playerId, queryClient])
+
   const loginMutation = useMutation({
     mutationFn: loginUser,
-    onSuccess: async (data) => {
-      const freshCharacter = await fetchCharacter()
-      queryClient.setQueryData(['character', data.playerId], freshCharacter)
+    onSuccess: (data) => {
+      setJustLoggedIn(true)
       setPlayerId(data.playerId)
-      setWelcomeProgress(freshCharacter.progress)
-      setView('dashboard')
-    },
+    }
   })
 
   const registerMutation = useMutation({
@@ -118,28 +125,46 @@ function App() {
 
   const logoutMutation = useMutation({
     mutationFn: logoutUser,
-    onSuccess: () => {
-      setPlayerId(null)
-      setUsername('')
-      setPassword('')
-      setView('login')
-    },
+    onSuccess: resetToLoggedOut,
   })
 
   const { data: character, isLoading, isSuccess, isError } = useQuery({
     queryKey: ['character', playerId],
     queryFn: fetchCharacter,
     retry: false,
-    staleTime: 5000,
   })
 
   useEffect(() => {
     if (isSuccess) {
+      if (justLoggedIn) {
+        setWelcomeProgress(character.progress)
+        setJustLoggedIn(false)
+      }
       setView('dashboard')
     } else if (isError) {
+      setJustLoggedIn(false)
       setView('login')
     }
-  }, [isSuccess, isError])
+  }, [isSuccess, isError, justLoggedIn, character])
+
+  useEffect(() => {
+    if (view !== 'dashboard') {
+      return
+    }
+
+    const ws = new WebSocket('ws://localhost:8080/api/game')
+
+    ws.onclose = (event) => {
+      if (event.code === 4001) {
+        resetToLoggedOut()
+        setForcedLogoutMessage(event.reason)
+      }
+    }
+
+    return () => {
+      ws.close()
+    }
+  }, [view, resetToLoggedOut])
 
   return (
     <div>
@@ -175,6 +200,7 @@ function App() {
             />
           </div>
           {autoLoginFailedMessage && <p>{autoLoginFailedMessage}</p>}
+          {forcedLogoutMessage && <p>{forcedLogoutMessage}</p>}
           {loginMutation.isError && <p>{loginMutation.error.message}</p>}
           <SubmitButton
             pending={loginMutation.isPending}

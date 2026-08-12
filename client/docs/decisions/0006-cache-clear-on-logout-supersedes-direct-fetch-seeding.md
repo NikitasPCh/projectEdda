@@ -1,0 +1,15 @@
+# 0006. Cache-clear-on-logout supersedes direct-fetch-and-seeding
+
+## Status
+Accepted. Supersedes [0005](0005-direct-fetch-and-cache-seeding-for-post-login-character-data.md).
+
+## Context
+`0005` worked around a real bug: re-logging in as the same player within the same browser tab reused the same `['character', playerId]` query key, and TanStack Query would serve the *stale* cached entry left over from the previous session before a background refetch caught up. The fix built at the time was a direct `fetchCharacter()` call in `loginMutation.onSuccess`, manually seeded into the cache via `queryClient.setQueryData`, with a specific state-update order (seed before `setPlayerId`) and a `staleTime: 5000` to stop the seeded data from being immediately refetched anyway. This worked, but left two competing sources of truth for the same data — the manual seed and `useQuery`'s own fetch — which was directly implicated in a separate concurrency bug (server ADR `0020`).
+
+While designing WebSocket-based forced logout, it became clear the root cause could be removed instead of routed around: if logout unconditionally clears its player's `['character', playerId]` cache entry, that key can never hold stale data from a previous session by the time a subsequent login (for that same player, in that same tab) happens. Once that's true, none of `0005`'s machinery is load-bearing anymore — a plain `useQuery`-driven fetch is guaranteed to be genuinely fresh on every login, not just usually fresh.
+
+## Decision
+`resetToLoggedOut()` — the function shared by both manual logout and (later) forced logout — calls `queryClient.removeQueries({ queryKey: ['character', playerId] })` before clearing `playerId` and returning to the login view. With that in place, `loginMutation.onSuccess` was reverted to only `setJustLoggedIn(true)` and `setPlayerId(data.playerId)`; the `character` `useQuery` performs the only fetch. The existing `isSuccess`/`isError` effect captures `character.progress` into `welcomeProgress` exactly once per login, gated by the `justLoggedIn` flag, then clears it — the original flag-based capture design `0005` had considered and moved away from, now safe because the specific hazard that broke it (a stale cache entry under the same key) can no longer exist. `staleTime: 5000` was removed from the `character` query, since it existed only to protect the now-removed seed-then-fetch race and has no remaining purpose with a single fetch path.
+
+## Consequences
+Back to one request path and one messenger (`useQuery`) instead of two. Verified in the browser: re-logging in as the same player in the same tab shows correct, fresh values immediately, with no stale-data flash. The backend's pessimistic lock (`0020`) remains the actual correctness guarantee regardless of frontend request pattern — this change is a genuine simplification back to less code, not a second correctness layer stacked on top of it. `0005` is kept in the log as the historical record of why the more complex approach existed, rather than being deleted.
