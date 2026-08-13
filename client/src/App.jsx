@@ -6,6 +6,45 @@ import './App.css'
 const PASSWORD_RULES = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).+$/
 const API_BASE = 'http://localhost:8080/api'
 
+function mergeProgress(character, progress) {
+  const skills = character.skills.map((skill) => 
+    skill.skillKey === progress.skillKey
+      ? { ...skill, xp: skill.xp + progress.xpGained }
+      : skill
+  )
+
+  const resources = character.resources.map((resource) => 
+    resource.resourceKey === progress.resourceKey
+    ? { ...resource, quantity: resource.quantity + progress.quantityGained }
+    : resource
+  )
+
+  let items = character.items
+  for (const gained of progress.itemsGained) {
+    const alreadyOwned = items.some((item) => item.itemKey === gained.itemKey)
+    items = alreadyOwned
+      ? items.map((item) =>
+        item.itemKey === gained.itemKey
+          ? { ...item, quantity: item.quantity + gained.quantityGained }
+          : item
+      )
+    : [...items, { itemKey: gained.itemKey, itemName: gained.itemName, rarity: gained.rarity, quantity: gained.quantityGained }]
+  }
+
+  return { ...character, skills, resources, items }
+}
+
+function buildTickMessage(progress) {
+  let message = `Action completed! Gained ${progress.xpGained} XP and ${progress.quantityGained} ${progress.resourceName}`
+  if (progress.itemsGained.length > 0){
+    const items = progress.itemsGained
+      .map((item) => `${item.quantityGained}x ${item.itemName}`)
+      .join(`, `)
+    message += `, plus ${items}`
+  }
+  return message + '.'
+}
+
 function App() {
   const [view, setView] = useState('checking')
   const [username, setUsername] = useState('')
@@ -18,6 +57,9 @@ function App() {
   const [welcomeProgress, setWelcomeProgress] = useState(null)
   const [justLoggedIn, setJustLoggedIn] = useState(false)
   const [forcedLogoutMessage, setForcedLogoutMessage] = useState(null)
+  const [tickMessage, setTickMessage] = useState(() => sessionStorage.getItem('tickMessage'))
+  const [tickCount, setTickCount] = useState(0)
+  const [initialDelay, setInitialDelay] = useState(0)
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
   const queryClient = useQueryClient()
 
@@ -88,6 +130,8 @@ function App() {
     setPlayerId(null)
     setUsername('')
     setPassword('')
+    setTickMessage(null)
+    sessionStorage.removeItem('tickMessage')
     setView('login')
   }, [playerId, queryClient])
 
@@ -142,11 +186,26 @@ function App() {
   }, [isSuccess, isError, justLoggedIn, character])
 
   useEffect(() => {
+    if (character?.lastCalculatedAt) {
+      setInitialDelay(Math.min((Date.now() - new Date(character.lastCalculatedAt).getTime()) / 1000, 5))
+    }
+  }, [character?.lastCalculatedAt])
+
+  useEffect(() => {
     if (view !== 'dashboard') {
       return
     }
 
     const ws = new WebSocket('ws://localhost:8080/api/game')
+
+    ws.onmessage = (event) => {
+      const progress = JSON.parse(event.data)
+      queryClient.setQueryData(['character', playerId], (old) => mergeProgress(old, progress))
+      const message = buildTickMessage(progress)
+      setTickMessage(message)
+      sessionStorage.setItem('tickMessage', message)
+      setTickCount((count) => count + 1)
+    }
 
     ws.onclose = (event) => {
       if (event.code === 4001) {
@@ -158,7 +217,7 @@ function App() {
     return () => {
       ws.close()
     }
-  }, [view, resetToLoggedOut])
+  }, [view, resetToLoggedOut, playerId, queryClient])
 
   return (
     <div>
@@ -285,6 +344,17 @@ function App() {
           {character && (
             <div>
               <h3>{character.name}</h3>
+              {tickMessage && <p>{tickMessage}</p>}
+              {character.currentActionName && (
+                <div className="progress-bar-track">
+                  <div
+                    className="progress-bar-fill"
+                    key={tickCount}
+                    style={tickCount === 0 ? { animationDelay: `-${initialDelay}s` } : undefined}
+                  ></div>
+                  <span className="progress-bar-label">{character.currentActionName}</span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => logoutMutation.mutate()}

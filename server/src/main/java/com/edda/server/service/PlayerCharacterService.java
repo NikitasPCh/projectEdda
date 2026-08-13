@@ -138,7 +138,11 @@ public class PlayerCharacterService {
                 })
                 .toList();
 
-        return new PlayerCharacterResponse(character.getName(), skills, resources, items, progress.orElse(null));
+        String currentActionName = character.getCurrentActionKey() == null
+                ? null
+                : orNotFound(actionRepository.findById(character.getCurrentActionKey()), "Action not found").getName();
+
+        return new PlayerCharacterResponse(character.getName(), skills, resources, items, progress.orElse(null), character.getCurrentActionKey(), currentActionName, character.getLastCalculatedAt());
     }
 
     @Transactional
