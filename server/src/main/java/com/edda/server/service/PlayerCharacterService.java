@@ -37,6 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -134,7 +135,7 @@ public class PlayerCharacterService {
         List<PlayerCharacterResponse.ItemQuantityResponse> items = characterInventoryRepository.findByIdPlayerCharacterId(character.getId()).stream()
                 .map(ci -> {
                     Item item = itemsByKey.get(ci.getId().getItemKey());
-                    return new PlayerCharacterResponse.ItemQuantityResponse(item.getKey(), item.getName(), item.getRarity(), ci.getQuantity());
+                    return new PlayerCharacterResponse.ItemQuantityResponse(item.getKey(), item.getName(), item.getRarity().name(), ci.getQuantity());
                 })
                 .toList();
 
@@ -179,33 +180,54 @@ public class PlayerCharacterService {
 
         Action action = orNotFound(actionRepository.findById(character.getCurrentActionKey()), "Action not found");
 
-        PrimaryRewardResult primaryRewardResult = applyPrimaryReward(character, action, n, 1.0);
-        List<ActionProgressResponse.ItemGainResponse> itemsGained = rollRareDrops(character, action, n);
+        XpGainResult xpGainResult = applyXpGain(character, action, n);
+
+        String resourceKey = null;
+        String resourceName = null;
+        long quantityGained = 0;
+        List<ActionProgressResponse.ItemGainResponse> itemsGained;
+
+        if (action.getRewardMode() == Action.RewardMode.STANDARD) {
+            PrimaryRewardResult primaryRewardResult = applyPrimaryReward(character, action, n, 1.0);
+            resourceKey = primaryRewardResult.resourceKey();
+            resourceName = primaryRewardResult.resourceName();
+            quantityGained = primaryRewardResult.quantityGained();
+            itemsGained = rollIndependentDrops(character, action, n);
+        } else {
+            itemsGained = rollWeightedPool(character, action, n);
+        }
 
         playerCharacterRepository.save(character);
 
         return Optional.of(new ActionProgressResponse(
-                primaryRewardResult.skillKey(), primaryRewardResult.skillName(), primaryRewardResult.xpGained(),
-                primaryRewardResult.resourceKey(), primaryRewardResult.resourceName(), primaryRewardResult.quantityGained(),
+                xpGainResult.skillKey(), xpGainResult.skillName(), xpGainResult.xpGained(),
+                resourceKey, resourceName, quantityGained,
                 itemsGained));
     }
 
-    private record PrimaryRewardResult(String skillKey, String skillName, long xpGained, String resourceKey, String resourceName, long quantityGained) {
+    private record XpGainResult(String skillKey, String skillName, long xpGained) {
     }
 
-    private PrimaryRewardResult applyPrimaryReward(PlayerCharacter character, Action action, long n, double coefficient) {
+    private XpGainResult applyXpGain(PlayerCharacter character, Action action, long n) {
         CharacterSkillId skillId = new CharacterSkillId();
         skillId.setPlayerCharacterId(character.getId());
         skillId.setSkillKey(action.getSkillKey());
 
         CharacterSkill characterSkill = orNotFound(characterSkillRepository.findById(skillId), "Character skill not found");
 
-        long xpGained = Math.round(action.getBaseXp() * n * coefficient);
+        long xpGained = Math.round(action.getBaseXp() * n);
         characterSkill.setXp(characterSkill.getXp() + xpGained);
         characterSkillRepository.save(characterSkill);
 
         Skill skill = orNotFound(skillRepository.findById(action.getSkillKey()), "Skill not found");
 
+        return new XpGainResult(skill.getKey(), skill.getName(), xpGained);
+    }
+
+    private record PrimaryRewardResult(String resourceKey, String resourceName, long quantityGained) {
+    }
+
+    private PrimaryRewardResult applyPrimaryReward(PlayerCharacter character, Action action, long n, double coefficient) {
         ActionPrimaryReward primaryReward = orNotFound(actionPrimaryRewardRepository.findById(action.getKey()), "Action primary reward not found");
 
         int range = primaryReward.getYieldMax() - primaryReward.getYieldMin() + 1;
@@ -225,16 +247,16 @@ public class PlayerCharacterService {
 
         Resource resource = orNotFound(resourceRepository.findById(primaryReward.getResourceKey()), "Resource not found");
 
-        return new PrimaryRewardResult(skill.getKey(), skill.getName(), xpGained, resource.getKey(), resource.getName(), quantityGained);
+        return new PrimaryRewardResult(resource.getKey(), resource.getName(), quantityGained);
     }
 
-    private List<ActionProgressResponse.ItemGainResponse> rollRareDrops(PlayerCharacter character, Action action, long n) {
+    private List<ActionProgressResponse.ItemGainResponse> rollIndependentDrops(PlayerCharacter character, Action action, long n) {
         List<ActionRareDrop> actionDrops = actionRareDropRepository.findByIdActionKey(action.getKey());
         List<ActionProgressResponse.ItemGainResponse> itemsGained = new ArrayList<>();
 
         for (ActionRareDrop rareDrop : actionDrops) {
             int successes = 0;
-            for (long j = 1; j <= n; j++) {
+            for (long tick = 0; tick < n; tick++) {
                 if (random.nextDouble() < rareDrop.getDropChance().doubleValue()) {
                     successes++;
                 }
@@ -244,26 +266,55 @@ public class PlayerCharacterService {
                 continue;
             }
 
-            CharacterInventoryId id = new CharacterInventoryId();
-            id.setPlayerCharacterId(character.getId());
-            id.setItemKey(rareDrop.getId().getItemKey());
-
-            Optional<CharacterInventory> existing = characterInventoryRepository.findById(id);
-            if (existing.isPresent()) {
-                CharacterInventory inventory = existing.get();
-                inventory.setQuantity(inventory.getQuantity() + successes);
-                characterInventoryRepository.save(inventory);
-            } else {
-                CharacterInventory inventory = new CharacterInventory();
-                inventory.setId(id);
-                inventory.setQuantity(successes);
-                characterInventoryRepository.save(inventory);
-            }
-
-            Item item = orNotFound(itemRepository.findById(rareDrop.getId().getItemKey()), "Item not found");
-            itemsGained.add(new ActionProgressResponse.ItemGainResponse(item.getKey(), item.getName(), item.getRarity(), successes));
+            itemsGained.add(creditItem(character, rareDrop.getId().getItemKey(), successes));
         }
 
         return itemsGained;
+    }
+
+    private List<ActionProgressResponse.ItemGainResponse> rollWeightedPool(PlayerCharacter character, Action action, long n) {
+        List<ActionRareDrop> pool = actionRareDropRepository.findByIdActionKey(action.getKey());
+        double totalWeight = pool.stream().mapToDouble(entry -> entry.getDropChance().doubleValue()).sum();
+
+        Map<String, Integer> countsByItemKey = new HashMap<>();
+        for (long tick = 0; tick < n; tick++) {
+            double roll = random.nextDouble() * totalWeight;
+            double cumulative = 0;
+            for (ActionRareDrop entry : pool) {
+                cumulative += entry.getDropChance().doubleValue();
+                if (roll < cumulative) {
+                    countsByItemKey.merge(entry.getId().getItemKey(), 1, Integer::sum);
+                    break;
+                }
+            }
+        }
+
+        List<ActionProgressResponse.ItemGainResponse> itemsGained = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : countsByItemKey.entrySet()) {
+            itemsGained.add(creditItem(character, entry.getKey(), entry.getValue()));
+        }
+
+        return itemsGained;
+    }
+
+    private ActionProgressResponse.ItemGainResponse creditItem(PlayerCharacter character, String itemKey, int quantity) {
+        CharacterInventoryId id = new CharacterInventoryId();
+        id.setPlayerCharacterId(character.getId());
+        id.setItemKey(itemKey);
+
+        Optional<CharacterInventory> existing = characterInventoryRepository.findById(id);
+        if (existing.isPresent()) {
+            CharacterInventory inventory = existing.get();
+            inventory.setQuantity(inventory.getQuantity() + quantity);
+            characterInventoryRepository.save(inventory);
+        } else {
+            CharacterInventory inventory = new CharacterInventory();
+            inventory.setId(id);
+            inventory.setQuantity(quantity);
+            characterInventoryRepository.save(inventory);
+        }
+
+        Item item = orNotFound(itemRepository.findById(itemKey), "Item not found");
+        return new ActionProgressResponse.ItemGainResponse(item.getKey(), item.getName(), item.getRarity().name(), quantity);
     }
 }

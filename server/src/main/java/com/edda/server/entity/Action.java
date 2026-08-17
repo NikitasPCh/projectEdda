@@ -4,6 +4,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,4 +30,12 @@ public class Action {
 
     @Column(name = "base_xp", nullable = false)
     private long baseXp;
+
+    public enum RewardMode {
+        STANDARD, WEIGHTED_POOL
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reward_mode", nullable = false, length = 20)
+    private RewardMode rewardMode;
 }
