@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -26,8 +27,12 @@ public class PlayerService {
     private final PlayerCharacterService playerCharacterService;
     private final SessionTokenStore sessionTokenStore;
     private final ConnectionRegistry connectionRegistry;
+
     private static final int FORCED_LOGOUT_CLOSE_CODE = 4001;
     private static final String FORCED_LOGOUT_REASON = "Logged in from another location";
+
+    private static final int LOGOUT_CLOSE_CODE = 4000;
+    private static final String LOGOUT_REASON = "Logged out";
 
     @Transactional
     public Player createPlayer(String username, String password) {
@@ -53,6 +58,8 @@ public class PlayerService {
     }
 
     public void logout(Cookie[] cookies) {
+        Optional<UUID> playerId = sessionTokenStore.resolveFromCookies(cookies);
         sessionTokenStore.invalidateFromCookies(cookies);
+        playerId.ifPresent(id -> connectionRegistry.closeIfPresent(id, LOGOUT_CLOSE_CODE, LOGOUT_REASON));
     }
 }
