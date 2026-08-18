@@ -11,5 +11,5 @@ import java.util.UUID;
 @Repository
 public interface CharacterResourceRepository extends JpaRepository<CharacterResource, CharacterResourceId> {
 
-    List<CharacterResource> findByIdPlayerCharacterId(UUID playerCharacterId);
+    List<CharacterResource> findByIdPlayerCharacterIdOrderByIdResourceKey(UUID playerCharacterId);
 }

@@ -112,7 +112,7 @@ public class PlayerCharacterService {
         Map<String, Skill> skillsByKey = skillRepository.findAll().stream()
                 .collect(Collectors.toMap(Skill::getKey, skill -> skill));
 
-        List<PlayerCharacterResponse.SkillXpResponse> skills = characterSkillRepository.findByIdPlayerCharacterId(character.getId()).stream()
+        List<PlayerCharacterResponse.SkillXpResponse> skills = characterSkillRepository.findByIdPlayerCharacterIdOrderByIdSkillKey(character.getId()).stream()
                 .map(cs -> {
                     Skill skill = skillsByKey.get(cs.getId().getSkillKey());
                     return new PlayerCharacterResponse.SkillXpResponse(skill.getKey(), skill.getName(), cs.getXp());
@@ -122,7 +122,7 @@ public class PlayerCharacterService {
         Map<String, Resource> resourcesByKey = resourceRepository.findAll().stream()
                 .collect(Collectors.toMap(Resource::getKey, resource -> resource));
 
-        List<PlayerCharacterResponse.ResourceQuantityResponse> resources = characterResourceRepository.findByIdPlayerCharacterId(character.getId()).stream()
+        List<PlayerCharacterResponse.ResourceQuantityResponse> resources = characterResourceRepository.findByIdPlayerCharacterIdOrderByIdResourceKey(character.getId()).stream()
                 .map(cr -> {
                     Resource resource = resourcesByKey.get(cr.getId().getResourceKey());
                     return new PlayerCharacterResponse.ResourceQuantityResponse(resource.getKey(), resource.getName(), cr.getQuantity());
@@ -132,7 +132,7 @@ public class PlayerCharacterService {
         Map<String, Item> itemsByKey = itemRepository.findAll().stream()
                 .collect(Collectors.toMap(Item::getKey, item -> item));
 
-        List<PlayerCharacterResponse.ItemQuantityResponse> items = characterInventoryRepository.findByIdPlayerCharacterId(character.getId()).stream()
+        List<PlayerCharacterResponse.ItemQuantityResponse> items = characterInventoryRepository.findByIdPlayerCharacterIdOrderByIdItemKey(character.getId()).stream()
                 .map(ci -> {
                     Item item = itemsByKey.get(ci.getId().getItemKey());
                     return new PlayerCharacterResponse.ItemQuantityResponse(item.getKey(), item.getName(), item.getRarity().name(), ci.getQuantity());
@@ -143,19 +143,27 @@ public class PlayerCharacterService {
                 ? null
                 : orNotFound(actionRepository.findById(character.getCurrentActionKey()), "Action not found").getName();
 
-        return new PlayerCharacterResponse(character.getName(), skills, resources, items, progress.orElse(null), character.getCurrentActionKey(), currentActionName, character.getLastCalculatedAt());
+        String pendingActionName = character.getPendingActionKey() == null
+                ? null
+                : orNotFound(actionRepository.findById(character.getPendingActionKey()), "Action not found").getName();
+
+        return new PlayerCharacterResponse(character.getName(), skills, resources, items, progress.orElse(null), character.getCurrentActionKey(), currentActionName, character.getPendingActionKey(), pendingActionName, character.getLastCalculatedAt());
     }
 
     @Transactional
     public void selectAction(UUID playerId, String actionKey) {
         PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
 
-        calculateOfflineProgress(character);
-
         Action action = orNotFound(actionRepository.findById(actionKey), "Action not found");
 
-        character.setCurrentActionKey(action.getKey());
-        character.setLastCalculatedAt(Instant.now());
+        if (character.getCurrentActionKey() == null) {
+            character.setCurrentActionKey(action.getKey());
+            character.setLastCalculatedAt(Instant.now());
+        } else {
+            character.setPendingActionKey(action.getKey());
+            calculateOfflineProgress(character);
+        }
+
         playerCharacterRepository.save(character);
     }
 
@@ -167,6 +175,14 @@ public class PlayerCharacterService {
 
     @Transactional
     public Optional<ActionProgressResponse> calculateOfflineProgress(PlayerCharacter character) {
+        Optional<ActionProgressResponse> result = applyElapsedProgress(character);
+        if (result.isPresent()) {
+            playerCharacterRepository.save(character);
+        }
+        return result;
+    }
+
+    private Optional<ActionProgressResponse> applyElapsedProgress(PlayerCharacter character) {
         if (character.getCurrentActionKey() == null) {
             return Optional.empty();
         }
@@ -176,11 +192,15 @@ public class PlayerCharacterService {
         if (n == 0) {
             return Optional.empty();
         }
-        character.setLastCalculatedAt(character.getLastCalculatedAt().plusSeconds(n * gameProperties.actionIntervalSeconds()));
+
+        boolean switchingAction = character.getPendingActionKey() != null;
+        long ticksToApply = switchingAction ? 1 : n;
+
+        character.setLastCalculatedAt(character.getLastCalculatedAt().plusSeconds(ticksToApply * gameProperties.actionIntervalSeconds()));
 
         Action action = orNotFound(actionRepository.findById(character.getCurrentActionKey()), "Action not found");
 
-        XpGainResult xpGainResult = applyXpGain(character, action, n);
+        XpGainResult xpGainResult = applyXpGain(character, action, ticksToApply);
 
         String resourceKey = null;
         String resourceName = null;
@@ -188,21 +208,41 @@ public class PlayerCharacterService {
         List<ActionProgressResponse.ItemGainResponse> itemsGained;
 
         if (action.getRewardMode() == Action.RewardMode.STANDARD) {
-            PrimaryRewardResult primaryRewardResult = applyPrimaryReward(character, action, n, 1.0);
+            PrimaryRewardResult primaryRewardResult = applyPrimaryReward(character, action, ticksToApply, 1.0);
             resourceKey = primaryRewardResult.resourceKey();
             resourceName = primaryRewardResult.resourceName();
             quantityGained = primaryRewardResult.quantityGained();
-            itemsGained = rollIndependentDrops(character, action, n);
+            itemsGained = rollIndependentDrops(character, action, ticksToApply);
         } else {
-            itemsGained = rollWeightedPool(character, action, n);
+            itemsGained = rollWeightedPool(character, action, ticksToApply);
         }
 
-        playerCharacterRepository.save(character);
-
-        return Optional.of(new ActionProgressResponse(
+        ActionProgressResponse result = new ActionProgressResponse(
                 xpGainResult.skillKey(), xpGainResult.skillName(), xpGainResult.xpGained(),
                 resourceKey, resourceName, quantityGained,
-                itemsGained));
+                itemsGained, action.getKey(), action.getName(), null, null);
+
+        if (switchingAction) {
+            character.setCurrentActionKey(character.getPendingActionKey());
+            character.setPendingActionKey(null);
+            result = applyElapsedProgress(character).orElse(result);
+        }
+
+        Action currentAction = switchingAction
+                ? orNotFound(actionRepository.findById(character.getCurrentActionKey()), "Action not found")
+                : action;
+
+        String pendingActionKey = character.getPendingActionKey();
+        String pendingActionName = pendingActionKey == null
+                ? null
+                : orNotFound(actionRepository.findById(pendingActionKey), "Action not found").getName();
+
+        return Optional.of(new ActionProgressResponse(
+                result.skillKey(), result.skillName(), result.xpGained(),
+                result.resourceKey(), result.resourceName(), result.quantityGained(),
+                result.itemsGained(),
+                currentAction.getKey(), currentAction.getName(),
+                pendingActionKey, pendingActionName));
     }
 
     private record XpGainResult(String skillKey, String skillName, long xpGained) {

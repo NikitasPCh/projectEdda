@@ -31,7 +31,15 @@ function mergeProgress(character, progress) {
     : [...items, { itemKey: gained.itemKey, itemName: gained.itemName, rarity: gained.rarity, quantity: gained.quantityGained }]
   }
 
-  return { ...character, skills, resources, items }
+  return { ...character,
+    skills,
+    resources,
+    items,
+    currentActionKey: progress.currentActionKey,
+    currentActionName: progress.currentActionName,
+    pendingActionKey: progress.pendingActionKey,
+    pendingActionName: progress.pendingActionName,
+  }
 }
 
 function buildTickMessage(progress) {
@@ -81,6 +89,14 @@ function App() {
     return response.json()
   }
 
+  async function fetchActions() {
+    const response = await safeFetch(`${API_BASE}/actions`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch actions')
+    }
+    return response.json()
+  }
+
   async function loginUser({ username, password }) {
     const response = await safeFetch(`${API_BASE}/players/login`, {
       method: 'POST',
@@ -125,6 +141,31 @@ function App() {
     }
   }
 
+  async function selectAction(actionKey) {
+    const response = await safeFetch(`${API_BASE}/players/character/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ actionKey })
+    })
+    if (!response.ok) {
+      throw new Error('Failed to select action')
+    }
+  }
+
+  const selectActionMutation = useMutation({
+    mutationFn: selectAction,
+    onSuccess: (_data, actionKey) => {
+      const action = actions?.find((a) => a.key === actionKey)
+      queryClient.setQueryData(['character', playerId], (old) => ({
+        ...old,
+        pendingActionKey: actionKey,
+        pendingActionName: action?.name ?? old.pendingActionName,
+      }))
+      queryClient.invalidateQueries({ queryKey: ['character', playerId] })
+    },
+  })
+
   const resetToLoggedOut = useCallback(() => {
     queryClient.removeQueries({ queryKey: ['character', playerId] })
     setPlayerId(null)
@@ -132,8 +173,10 @@ function App() {
     setPassword('')
     setTickMessage(null)
     sessionStorage.removeItem('tickMessage')
+    selectActionMutation.reset()
+    setForcedLogoutMessage(null)
     setView('login')
-  }, [playerId, queryClient])
+  }, [playerId, queryClient, selectActionMutation])
 
   const loginMutation = useMutation({
     mutationFn: loginUser,
@@ -170,6 +213,11 @@ function App() {
     queryKey: ['character', playerId],
     queryFn: fetchCharacter,
     retry: false,
+  })
+
+  const { data: actions } = useQuery({
+    queryKey: ['actions'],
+    queryFn: fetchActions,
   })
 
   useEffect(() => {
@@ -355,6 +403,23 @@ function App() {
                   <span className="progress-bar-label">{character.currentActionName}</span>
                 </div>
               )}
+              {character.pendingActionKey ? (
+                <p>Waiting for {character.pendingActionName} to start...</p>
+              ) : (
+                <div>
+                  {actions?.map((action) => (
+                    <button
+                      key={action.key}
+                      type="button"
+                      onClick={() => selectActionMutation.mutate(action.key)}
+                      disabled={selectActionMutation.isPending}
+                    >
+                      {action.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectActionMutation.isError && <p>{selectActionMutation.error.message}</p>}
               <button
                 type="button"
                 onClick={() => logoutMutation.mutate()}

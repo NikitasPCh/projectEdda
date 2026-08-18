@@ -33,6 +33,9 @@ public class PlayerCharacter {
     @Column(name = "current_action_key", length = 50)
     private String currentActionKey;
 
+    @Column(name = "pending_action_key", length = 50)
+    private String pendingActionKey;
+
     @Column(name = "last_calculated_at")
     private Instant lastCalculatedAt;
 }

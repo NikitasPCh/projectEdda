@@ -11,5 +11,5 @@ import java.util.UUID;
 @Repository
 public interface CharacterSkillRepository extends JpaRepository<CharacterSkill, CharacterSkillId> {
 
-    List<CharacterSkill> findByIdPlayerCharacterId(UUID playerCharacterId);
+    List<CharacterSkill> findByIdPlayerCharacterIdOrderByIdSkillKey(UUID playerCharacterId);
 }
