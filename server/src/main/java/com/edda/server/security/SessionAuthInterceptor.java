@@ -25,6 +25,10 @@ public class SessionAuthInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
 
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
         Cookie[] cookies = request.getCookies();
 
         Optional<UUID> playerId = sessionTokenStore.resolveFromCookies(cookies);
