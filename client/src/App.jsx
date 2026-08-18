@@ -43,14 +43,25 @@ function mergeProgress(character, progress) {
 }
 
 function buildTickMessage(progress) {
-  let message = `Action completed! Gained ${progress.xpGained} XP and ${progress.quantityGained} ${progress.resourceName}`
-  if (progress.itemsGained.length > 0){
-    const items = progress.itemsGained
-      .map((item) => `${item.quantityGained}x ${item.itemName}`)
-      .join(`, `)
-    message += `, plus ${items}`
+  const nodes = [`Action completed! Gained ${progress.xpGained} XP`]
+
+  if (progress.resourceName) {
+    nodes.push(` and ${progress.quantityGained} ${progress.resourceName}`)
   }
-  return message + '.'
+
+  if (progress.itemsGained.length > 0) {
+    nodes.push(progress.resourceName ? ', plus ' : ' and ')
+    progress.itemsGained.forEach((item, index) => {
+      if (index > 0) {
+        nodes.push(', ')
+      }
+      nodes.push(`${item.quantityGained}x `)
+      nodes.push(<span key={item.itemKey} className={`rarity-${item.rarity}`}>{item.itemName}</span>)
+    })
+  }
+
+  nodes.push('.')
+  return nodes
 }
 
 function App() {
@@ -65,7 +76,10 @@ function App() {
   const [welcomeProgress, setWelcomeProgress] = useState(null)
   const [justLoggedIn, setJustLoggedIn] = useState(false)
   const [forcedLogoutMessage, setForcedLogoutMessage] = useState(null)
-  const [tickMessage, setTickMessage] = useState(() => sessionStorage.getItem('tickMessage'))
+  const [tickProgress, setTickProgress] = useState(() => {
+    const stored = sessionStorage.getItem('tickProgress')
+    return stored ? JSON.parse(stored) : null
+  })
   const [tickCount, setTickCount] = useState(0)
   const [initialDelay, setInitialDelay] = useState(0)
   const passwordValid = registerPassword.length >= 8 && PASSWORD_RULES.test(registerPassword)
@@ -171,8 +185,8 @@ function App() {
     setPlayerId(null)
     setUsername('')
     setPassword('')
-    setTickMessage(null)
-    sessionStorage.removeItem('tickMessage')
+    setTickProgress(null)
+    sessionStorage.removeItem('tickProgress')
     selectActionMutation.reset()
     setForcedLogoutMessage(null)
     setView('login')
@@ -249,9 +263,8 @@ function App() {
     ws.onmessage = (event) => {
       const progress = JSON.parse(event.data)
       queryClient.setQueryData(['character', playerId], (old) => mergeProgress(old, progress))
-      const message = buildTickMessage(progress)
-      setTickMessage(message)
-      sessionStorage.setItem('tickMessage', message)
+      setTickProgress(progress)
+      sessionStorage.setItem('tickProgress', JSON.stringify(progress))
       setTickCount((count) => count + 1)
     }
 
@@ -392,7 +405,7 @@ function App() {
           {character && (
             <div>
               <h3>{character.name}</h3>
-              {tickMessage && <p>{tickMessage}</p>}
+              {tickProgress && <p>{buildTickMessage(tickProgress)}</p>}
               {character.currentActionName && (
                 <div className="progress-bar-track">
                   <div
@@ -450,7 +463,7 @@ function App() {
               <ul>
                 {character.items.map((item) => (
                   <li key={item.itemKey}>
-                    {item.itemName} ({item.rarity}): {item.quantity}
+                    <span className={`rarity-${item.rarity}`}>{item.itemName}</span>: {item.quantity}
                   </li>
                 ))}
               </ul>
@@ -467,12 +480,14 @@ function App() {
             <h3>Welcome back!</h3>
             <p>While away you gained:</p>
             <p>{welcomeProgress.skillName}: +{welcomeProgress.xpGained} XP</p>
-            <p>{welcomeProgress.resourceName}: +{welcomeProgress.quantityGained}</p>
+            {welcomeProgress.resourceName && (
+              <p>{welcomeProgress.resourceName}: +{welcomeProgress.quantityGained}</p>
+            )}
             {welcomeProgress.itemsGained.length > 0 && (
               <ul>
                 {welcomeProgress.itemsGained.map((item) => (
                   <li key={item.itemKey}>
-                    {item.itemName} ({item.rarity}): +{item.quantityGained}
+                    <span className={`rarity-${item.rarity}`}>{item.itemName}</span>: +{item.quantityGained}
                   </li>
                 ))}
               </ul>

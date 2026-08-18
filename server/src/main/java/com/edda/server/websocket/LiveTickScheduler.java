@@ -1,7 +1,7 @@
 package com.edda.server.websocket;
 
 import com.edda.server.dto.ActionProgressResponse;
-import com.edda.server.service.PlayerCharacterService;
+import com.edda.server.service.TickService;
 import com.edda.server.session.ConnectionRegistry;
 import tools.jackson.databind.json.JsonMapper;
 import org.slf4j.Logger;
@@ -21,14 +21,14 @@ public class LiveTickScheduler {
     private static final Logger log = LoggerFactory.getLogger(LiveTickScheduler.class);
 
     private final ConnectionRegistry connectionRegistry;
-    private final PlayerCharacterService playerCharacterService;
+    private final TickService tickService;
     private final JsonMapper objectMapper;
 
     public LiveTickScheduler(ConnectionRegistry connectionRegistry,
-                             PlayerCharacterService playerCharacterService,
+                             TickService tickService,
                              JsonMapper objectMapper) {
         this.connectionRegistry = connectionRegistry;
-        this.playerCharacterService = playerCharacterService;
+        this.tickService = tickService;
         this.objectMapper = objectMapper;
     }
 
@@ -36,24 +36,21 @@ public class LiveTickScheduler {
     public void tick() {
         for (UUID playerId : connectionRegistry.connectedPlayerIds()) {
             try {
-                tickPlayer(playerId);
+                Optional<ActionProgressResponse> progress = tickService.tickPlayer(playerId);
+                if (progress.isPresent()) {
+                    sendProgress(playerId, progress.get());
+                }
             } catch (Exception e) {
                 log.warn("Failed to tick player {}", playerId, e);
             }
         }
     }
 
-    private void tickPlayer(UUID playerId) throws IOException {
-        Optional<ActionProgressResponse> progress = playerCharacterService.calculateProgress(playerId);
-        if (progress.isEmpty()) {
-            return;
-        }
-
+    private void sendProgress(UUID playerId, ActionProgressResponse progress) throws IOException {
         WebSocketSession session = connectionRegistry.get(playerId);
         if (session == null || !session.isOpen()) {
             return;
         }
-
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(progress.get())));
+        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(progress)));
     }
 }

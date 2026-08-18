@@ -55,3 +55,29 @@
     width: 100%;
   }
 }
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rarity-uncommon {
+  color: #74AF8F;
+}
+
+.rarity-rare {
+  color: #455D8B;
+}
+
+.rarity-epic {
+  color: #4E3193;
+}
+
+.rarity-legendary {
+  color: #9E2F45;
+}
+
+.rarity-unique {
+  color: #C7966E;
+}

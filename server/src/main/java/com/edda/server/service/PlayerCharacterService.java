@@ -161,16 +161,14 @@ public class PlayerCharacterService {
             character.setLastCalculatedAt(Instant.now());
         } else {
             character.setPendingActionKey(action.getKey());
-            calculateProgress(character);
         }
 
         playerCharacterRepository.save(character);
     }
 
     @Transactional
-    public Optional<ActionProgressResponse> calculateProgress(UUID playerId) {
-        PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
-        return calculateProgress(character);
+    public PlayerCharacter getCharacter(UUID playerId) {
+        return orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
     }
 
     @Transactional
