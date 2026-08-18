@@ -107,7 +107,7 @@ public class PlayerCharacterService {
     public PlayerCharacterResponse getCharacterSummary(UUID playerId) {
         PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
 
-        Optional<ActionProgressResponse> progress = calculateOfflineProgress(character);
+        Optional<ActionProgressResponse> progress = calculateProgress(character);
 
         Map<String, Skill> skillsByKey = skillRepository.findAll().stream()
                 .collect(Collectors.toMap(Skill::getKey, skill -> skill));
@@ -161,20 +161,20 @@ public class PlayerCharacterService {
             character.setLastCalculatedAt(Instant.now());
         } else {
             character.setPendingActionKey(action.getKey());
-            calculateOfflineProgress(character);
+            calculateProgress(character);
         }
 
         playerCharacterRepository.save(character);
     }
 
     @Transactional
-    public Optional<ActionProgressResponse> calculateOfflineProgress(UUID playerId) {
+    public Optional<ActionProgressResponse> calculateProgress(UUID playerId) {
         PlayerCharacter character = orNotFound(playerCharacterRepository.findByPlayerId(playerId), "Character not found");
-        return calculateOfflineProgress(character);
+        return calculateProgress(character);
     }
 
     @Transactional
-    public Optional<ActionProgressResponse> calculateOfflineProgress(PlayerCharacter character) {
+    public Optional<ActionProgressResponse> calculateProgress(PlayerCharacter character) {
         Optional<ActionProgressResponse> result = applyElapsedProgress(character);
         if (result.isPresent()) {
             playerCharacterRepository.save(character);

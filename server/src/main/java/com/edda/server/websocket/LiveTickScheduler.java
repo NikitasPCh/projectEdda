@@ -44,7 +44,7 @@ public class LiveTickScheduler {
     }
 
     private void tickPlayer(UUID playerId) throws IOException {
-        Optional<ActionProgressResponse> progress = playerCharacterService.calculateOfflineProgress(playerId);
+        Optional<ActionProgressResponse> progress = playerCharacterService.calculateProgress(playerId);
         if (progress.isEmpty()) {
             return;
         }
