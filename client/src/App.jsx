@@ -171,12 +171,19 @@ function App() {
     mutationFn: selectAction,
     onSuccess: (_data, actionKey) => {
       const action = actions?.find((a) => a.key === actionKey)
-      queryClient.setQueryData(['character', playerId], (old) => ({
-        ...old,
-        pendingActionKey: actionKey,
-        pendingActionName: action?.name ?? old.pendingActionName,
-      }))
-      queryClient.invalidateQueries({ queryKey: ['character', playerId] })
+      queryClient.setQueryData(['character', playerId], (old) => 
+        old.currentActionKey == null
+          ? {
+              ...old,
+              currentActionKey: actionKey,
+              currentActionName: action?.name ?? old.currentActionName,
+            }
+          : {
+            ...old,
+            pendingActionKey: actionKey,
+            pendingActionName: action?.name ?? old.pendingActionName,
+            }
+      )
     },
   })
 
